@@ -7,24 +7,333 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(readxl)
+library(fuzzyjoin)
+library(broom)
 ```
 
-## R Markdown
+# Aims
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+* Compare eDNA concentrations with Catch Per Unit Effort (CPUE) data. 
+* Try to match % positive rate to 0.04 threshold used in CPUE analysis.
+* Test to see if eDNA could be used to safely "close" or "open" a reef for culling operations.
+* Identify reefs where eDNA and CPUE data disagree.
+* Looks closely at flase positive/negative rates
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
 
-```{r cars}
-summary(cars)
+```{r Load Data}
+# Load eDNA data
+cull.dat <- read_excel("data/250929_COTS-Manta-Cull-RHIS-Data-Matthews-and-Schlawinsky.xlsx", 
+                        sheet = "Cull")
+edna.dat <- read_excel("data/CCIP-RT-02 eDNA data.xlsx", sheet =1)
+
+# Make clean copies with consistent names
+cull <- cull.dat %>%
+  rename(Reef = ReefName) %>%
+  mutate(date_cull = as.Date(SurveyDate))
+
+edna_agg <- edna.dat %>%
+  # rename for consistency; update "Date" if your column differs
+  mutate(
+    Reef      = ReefName,
+    date_edna = as.Date(Date)
+  ) %>%
+  arrange(Reef, Year, date_edna) %>%
+  group_by(Reef, Year) %>%
+  # cluster rows into groups where consecutive samples are ≤ 7 days apart
+  mutate(
+    grp = cumsum(
+      if_else(
+        is.na(lag(date_edna)) |
+          as.numeric(date_edna - lag(date_edna)) > 7,
+        1L, 0L
+      )
+    )
+  ) %>%
+  group_by(Reef, Year, grp) %>%
+  summarise(
+    date_edna = min(date_edna),                       # representative date (or use mean)
+    perc_pos  = mean(LOD_sample_positive, na.rm = TRUE) * 100,
+    n_samples = n(),
+    .groups   = "drop"
+  )
+
+
+
+# Site aggregation
+edna_agg.site <- edna.dat %>%
+  # rename for consistency; update "Date" if your column differs
+  mutate(
+    Reef      = ReefName,
+    date_edna = as.Date(Date)
+  ) %>%
+  arrange(Reef, Year, date_edna) %>%
+  group_by(Reef, Year, Site_name) %>%
+  # cluster rows into groups where consecutive samples are ≤ 7 days apart
+  mutate(
+    grp = cumsum(
+      if_else(
+        is.na(lag(date_edna)) |
+          as.numeric(date_edna - lag(date_edna)) > 7,
+        1L, 0L
+      )
+    )
+  ) %>%
+  group_by(Reef, Year, Site_name, grp) %>%
+  summarise(
+    Lat = mean(Lat), Long = mean(Long),
+    date_edna = min(date_edna),                       # representative date (or use mean)
+    perc_pos  = mean(LOD_sample_positive, na.rm = TRUE) * 100,
+    n_samples = n(),
+    .groups   = "drop"
+  )
+
 ```
 
-## Including Plots
+## Plot within 6 month window
 
-You can also embed plots, for example:
+```{r}
+win_days <- 183
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+same6_any <- fuzzy_inner_join(
+  cull, edna_agg,
+  by = c("Reef" = "Reef",
+         "date_cull" = "date_edna"),
+  match_fun = list(
+    `==`,
+    function(cull_date, edna_date) {
+      abs(as.numeric(cull_date - edna_date)) <= win_days
+    }
+  )
+) %>%
+  mutate(diff_days = as.numeric(date_cull - date_edna),
+         Reef = Reef.x)
+
+same6_any_closest <- same6_any %>%
+  group_by(Reef, date_cull) %>%
+  slice_min(abs(diff_days), with_ties = FALSE) %>%
+  ungroup()
+
+reef_any <- same6_any %>%
+  group_by(Reef) %>%
+  summarise(
+    # reef-level CPUE: total COTS / total bottom time over matched events
+    total_cots      = sum(Cohort1 + Cohort2 + Cohort3 + Cohort4, na.rm = TRUE),
+    total_bottom    = sum(Bottomtime, na.rm = TRUE),
+    cpue_reef       = total_cots / total_bottom,
+
+    # reef-level eDNA signal from matched eDNA records
+    perc_pos_reef   = mean(perc_pos, na.rm = TRUE),
+
+    n_matches       = n(),
+    .groups         = "drop"
+  )
+
+reef_any_closest <- same6_any_closest %>%
+  group_by(Reef) %>%
+  summarise(
+    # reef-level CPUE: total COTS / total bottom time over matched events
+    total_cots      = sum(Cohort1 + Cohort2 + Cohort3 + Cohort4, na.rm = TRUE),
+    total_bottom    = sum(Bottomtime, na.rm = TRUE),
+    cpue_reef       = total_cots / total_bottom,
+
+    # reef-level eDNA signal from matched eDNA records
+    perc_pos_reef   = mean(perc_pos, na.rm = TRUE),
+
+    n_matches       = n(),
+    .groups         = "drop"
+  )
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+# eDNA 6 before culling
+
+```{r}
+before6 <- fuzzy_inner_join(
+  cull, edna_agg,
+  by = c("Reef" = "Reef",
+         "date_cull" = "date_edna"),
+  match_fun = list(
+    `==`,
+    function(cull_date, edna_date) {
+      diff <- as.numeric(cull_date - edna_date)
+      diff >= 0 & diff <= win_days
+    }
+  )
+) %>%
+  mutate(diff_days = as.numeric(date_cull - date_edna),
+         Reef = Reef.x)
+
+before6_closest <- before6 %>%
+  group_by(Reef, date_cull) %>%
+  slice_min(diff_days, with_ties = FALSE) %>%
+  ungroup()
+
+reef_before <- before6 %>%
+  group_by(Reef) %>%
+  summarise(
+    # reef-level CPUE: total COTS / total bottom time over matched events
+    total_cots      = sum(Cohort1 + Cohort2 + Cohort3 + Cohort4, na.rm = TRUE),
+    total_bottom    = sum(Bottomtime, na.rm = TRUE),
+    cpue_reef       = total_cots / total_bottom,
+
+    # reef-level eDNA signal from matched eDNA records
+    perc_pos_reef   = mean(perc_pos, na.rm = TRUE),
+
+    n_matches       = n(),
+    .groups         = "drop"
+  )
+
+reef_before_closest <- before6_closest %>%
+  group_by(Reef) %>%
+  summarise(
+    # reef-level CPUE: total COTS / total bottom time over matched events
+    total_cots      = sum(Cohort1 + Cohort2 + Cohort3 + Cohort4, na.rm = TRUE),
+    total_bottom    = sum(Bottomtime, na.rm = TRUE),
+    cpue_reef       = total_cots / total_bottom,
+
+    # reef-level eDNA signal from matched eDNA records
+    perc_pos_reef   = mean(perc_pos, na.rm = TRUE),
+
+    n_matches       = n(),
+    .groups         = "drop"
+  )
+```
+
+
+# Plot Comparison
+
+```{r}
+ggplot(reef_any, aes(x = perc_pos_reef, y = cpue_reef)) +
+  geom_point(size = 2) +
+  geom_smooth(method = "lm", se = TRUE) +
+  labs(
+    x = "% eDNA positive (reef-level)",
+    y = "CPUE (reef-level; Cohort1–4 / Bottomtime)",
+    title = "Reef-level CPUE vs eDNA (±6 months match)"
+  ) +
+  theme_bw()
+```
+
+```{r}
+ggplot(reef_any_closest, aes(x = perc_pos_reef, y = cpue_reef)) +
+  geom_point(size = 2) +
+  geom_smooth(method = "lm", se = TRUE) +
+  labs(
+    x = "% eDNA positive (reef-level)",
+    y = "CPUE (reef-level; Cohort1–4 / Bottomtime)",
+    title = "Reef-level CPUE vs eDNA (±6 months match)"
+  ) +
+  theme_bw()
+```
+
+ ## eDNA 6 before culling plot
+ 
+```{r}
+m_any <- lm(cpue_reef ~ perc_pos_reef, data = reef_any)
+m_before <- lm(cpue_reef ~ perc_pos_reef, data = reef_before)
+
+
+
+lm_label <- function(model,
+                     digits_r2 = 2,
+                     digits_p = 3,
+                     digits_rmse = 2) {
+  g <- glance(model)
+  r2 <- g$r.squared
+  p  <- g$p.value
+
+  # overall p-value fallback if glance() doesn't provide it
+  if (is.na(p)) {
+    fs <- summary(model)$fstatistic
+    p <- pf(fs[1], fs[2], fs[3], lower.tail = FALSE)
+  }
+
+  rmse <- sqrt(mean(residuals(model)^2))
+
+  p_txt <- if (p < 0.001) {
+    "< 0.001"
+  } else {
+    formatC(p, format = "f", digits = digits_p)
+  }
+
+  sprintf(
+    paste0("R^2 = %.", digits_r2, "f\n",
+           "p = %s\n",
+           "RMSE = %.", digits_rmse, "f"),
+    r2, p_txt, rmse
+  )
+}
+
+```
+
+```{r}
+ggplot(reef_before, aes(x = perc_pos_reef, y = cpue_reef)) +
+  geom_point(size = 2) +
+  geom_smooth(method = "lm", se = TRUE) +
+  labs(
+    x = "% eDNA positive (reef-level)",
+    y = "CPUE (reef-level; Cohort1–4 / Bottomtime)",
+    title = "Reef-level CPUE vs eDNA (eDNA ≤ 6 months before cull)"
+  ) +
+  theme_bw()
+
+ggplot(reef_before_closest, aes(x = perc_pos_reef, y = cpue_reef)) +
+  geom_point(size = 2) +
+  geom_smooth(method = "lm", se = TRUE) +
+  labs(
+    x = "% eDNA positive (reef-level)",
+    y = "CPUE (reef-level; Cohort1–4 / Bottomtime)",
+    title = "Reef-level CPUE vs eDNA (eDNA ≤ 6 months before cull)"
+  ) +
+  theme_bw()
+```
+ 
+
+## Best models
+
+```{r}
+lab_any <- lm_label(m_any)
+lab_before <- lm_label(m_before)
+
+
+ggplot(reef_before, aes(x = perc_pos_reef, y = cpue_reef)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0.04, linetype = "dashed", color = "purple") +
+  geom_smooth(method = "lm", se = TRUE) +
+    annotate(
+    "text",
+    x = -Inf, y = Inf,
+    label = lab_before,
+    hjust = -0.1, vjust = 1.1,
+    size = 3.5
+  ) +
+  labs(
+    x = "% eDNA positive (reef-level)",
+    y = "CPUE (reef-level; Cohort1–4 / Bottomtime)",
+    title = "Reef-level CPUE vs eDNA (eDNA ≤ 6 months before cull)"
+  ) +
+  theme_bw()
+```
+
+```{r}
+
+ggplot(reef_any, aes(x = perc_pos_reef, y = cpue_reef)) +
+  geom_point(size = 2) +
+  geom_smooth(method = "lm", se = TRUE) +
+    annotate(
+    "text",
+    x = -Inf, y = Inf,
+    label = lab_any,
+    hjust = -0.1, vjust = 1.1,
+    size = 3.5
+  ) +
+  labs(
+    x = "% eDNA positive (reef-level)",
+    y = "CPUE (reef-level; Cohort1–4 / Bottomtime)",
+    title = "Reef-level CPUE vs eDNA (±6 months match)"
+  ) +
+  theme_bw()
+```
+
