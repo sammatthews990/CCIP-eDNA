@@ -27,18 +27,23 @@ library(broom)
 # Load eDNA data
 cull.dat <- read_excel("data/250929_COTS-Manta-Cull-RHIS-Data-Matthews-and-Schlawinsky.xlsx", 
                         sheet = "Cull")
-edna.dat <- read_excel("data/CCIP-RT-02 eDNA data.xlsx", sheet =1)
+# edna.dat <- read_excel("data/CCIP-RT-02 eDNA data.xlsx", sheet =1)
+edna.dat <- read.csv("data/eDNA data_ALL.csv") |>
+  mutate(Conc_mean = as.numeric(Conc_mean)) |>
+  filter(Collection.organisation == "AIMS")
 
 # Make clean copies with consistent names
 cull <- cull.dat %>%
   rename(Reef = ReefName) %>%
-  mutate(date_cull = as.Date(SurveyDate))
+  mutate(date_cull = as.Date(SurveyDate)) 
 
 edna_agg <- edna.dat %>%
+  filter(!is.na(Year)) %>%
   # rename for consistency; update "Date" if your column differs
   mutate(
     Reef      = ReefName,
-    date_edna = as.Date(Date)
+    date_edna = as.Date(Date, format = "%d/%m/%Y"),
+    Conc_mean = as.numeric(Conc_mean)
   ) %>%
   arrange(Reef, Year, date_edna) %>%
   group_by(Reef, Year) %>%
@@ -51,10 +56,11 @@ edna_agg <- edna.dat %>%
         1L, 0L
       )
     )
-  ) %>%
+  ) %>% ungroup() %>%
   group_by(Reef, Year, grp) %>%
   summarise(
-    date_edna = min(date_edna),                       # representative date (or use mean)
+    date_edna = min(date_edna), # representative date (or use mean)
+    conc_mean = mean(Conc_mean, na.rm = TRUE),
     perc_pos  = mean(LOD_sample_positive, na.rm = TRUE) * 100,
     n_samples = n(),
     .groups   = "drop"
@@ -64,10 +70,12 @@ edna_agg <- edna.dat %>%
 
 # Site aggregation
 edna_agg.site <- edna.dat %>%
+  filter(!is.na(Year)) %>%
   # rename for consistency; update "Date" if your column differs
   mutate(
     Reef      = ReefName,
-    date_edna = as.Date(Date)
+    date_edna = as.Date(Date,, format = "%d/%m/%Y"),
+    Conc_mean = as.numeric(Conc_mean)
   ) %>%
   arrange(Reef, Year, date_edna) %>%
   group_by(Reef, Year, Site_name) %>%
@@ -84,7 +92,8 @@ edna_agg.site <- edna.dat %>%
   group_by(Reef, Year, Site_name, grp) %>%
   summarise(
     Lat = mean(Lat), Long = mean(Long),
-    date_edna = min(date_edna),                       # representative date (or use mean)
+    date_edna = min(date_edna),   # representative date (or use mean)
+    conc_mean = mean(Conc_mean, na.rm = TRUE),
     perc_pos  = mean(LOD_sample_positive, na.rm = TRUE) * 100,
     n_samples = n(),
     .groups   = "drop"
@@ -111,6 +120,7 @@ same6_any <- fuzzy_inner_join(
   mutate(diff_days = as.numeric(date_cull - date_edna),
          Reef = Reef.x)
 
+
 same6_any_closest <- same6_any %>%
   group_by(Reef, date_cull) %>%
   slice_min(abs(diff_days), with_ties = FALSE) %>%
@@ -126,6 +136,7 @@ reef_any <- same6_any %>%
 
     # reef-level eDNA signal from matched eDNA records
     perc_pos_reef   = mean(perc_pos, na.rm = TRUE),
+    conc_mean_reef = mean(conc_mean, na.rm = TRUE),
 
     n_matches       = n(),
     .groups         = "drop"
@@ -171,7 +182,7 @@ before6_closest <- before6 %>%
   ungroup()
 
 reef_before <- before6 %>%
-  group_by(Reef) %>%
+  group_by(Reef, Year, grp) %>%
   summarise(
     # reef-level CPUE: total COTS / total bottom time over matched events
     total_cots      = sum(Cohort1 + Cohort2 + Cohort3 + Cohort4, na.rm = TRUE),
@@ -180,13 +191,14 @@ reef_before <- before6 %>%
 
     # reef-level eDNA signal from matched eDNA records
     perc_pos_reef   = mean(perc_pos, na.rm = TRUE),
+    conc_mean_reef = mean(conc_mean, na.rm = TRUE),
 
     n_matches       = n(),
     .groups         = "drop"
   )
 
 reef_before_closest <- before6_closest %>%
-  group_by(Reef) %>%
+  group_by(Reef, Year, grp) %>%
   summarise(
     # reef-level CPUE: total COTS / total bottom time over matched events
     total_cots      = sum(Cohort1 + Cohort2 + Cohort3 + Cohort4, na.rm = TRUE),
@@ -213,6 +225,29 @@ ggplot(reef_any, aes(x = perc_pos_reef, y = cpue_reef)) +
     y = "CPUE (reef-level; Cohort1–4 / Bottomtime)",
     title = "Reef-level CPUE vs eDNA (±6 months match)"
   ) +
+  theme_bw()
+
+ggplot(reef_any, aes(x = log(conc_mean_reef), y = cpue_reef)) +
+  geom_point(size = 2) +
+  geom_smooth(method = "lm", se = TRUE) +
+  labs(
+    x = "Log Mean copy numbr (Concntration; reef-level)",
+    y = "CPUE (reef-level; Cohort1–4 / Bottomtime)",
+    title = "Reef-level CPUE vs eDNA (±6 months match)"
+  ) +
+  theme_bw()
+
+
+ggplot(reef_any, aes(x = log1p(conc_mean_reef), y = cpue_reef)) +
+  geom_point(size = 2) +
+  geom_smooth(method = "lm", se = TRUE) +
+  labs(x = "log1p(mean concentration)", y = "CPUE") +
+  theme_bw()
+
+ggplot(reef_any, aes(x = asinh(conc_mean_reef), y = cpue_reef)) +
+  geom_point(size = 2) +
+  geom_smooth(method = "lm", se = TRUE) +
+  labs(x = "asinh(mean concentration)", y = "CPUE") +
   theme_bw()
 ```
 
@@ -321,6 +356,7 @@ ggplot(reef_before, aes(x = perc_pos_reef, y = cpue_reef)) +
 
 ggplot(reef_any, aes(x = perc_pos_reef, y = cpue_reef)) +
   geom_point(size = 2) +
+    geom_hline(yintercept = 0.04, linetype = "dashed", color = "purple") +
   geom_smooth(method = "lm", se = TRUE) +
     annotate(
     "text",
@@ -335,5 +371,700 @@ ggplot(reef_any, aes(x = perc_pos_reef, y = cpue_reef)) +
     title = "Reef-level CPUE vs eDNA (±6 months match)"
   ) +
   theme_bw()
+```
+
+```{r}
+library(MASS)   # for glm.nb
+library(glmmTMB)  # for glmmTMB)
+
+dat <- reef_before
+
+# Start with NegBin to handle overdispersion; fall back to Poisson if theta→∞
+# m_nb <- glm.nb(total_cots ~ perc_pos_reef + offset(log(total_bottom)), data = dat)
+# summary(m_nb)
+
+m_nb <- glmmTMB(
+  total_cots ~ perc_pos_reef + offset(log(total_bottom)) + (1|Reef),
+  family = nbinom2(),
+  data = dat
+)
+
+
+# ----- Smooth CI ribbon over perc_pos_reef -----
+effort_ref <- median(dat$total_bottom, na.rm = TRUE)
+
+nd <- tibble(
+  perc_pos_reef = seq(min(dat$perc_pos_reef, na.rm = TRUE),
+                      max(dat$perc_pos_reef, na.rm = TRUE),
+                      length.out = 200),
+  total_bottom = effort_ref,
+  Reef = NA
+)
+
+pred <- predict(m_nb, newdata = nd, type = "link", se.fit = TRUE, re.form = NA)
+
+nd <- nd %>%
+  mutate(
+    # back-transform to expected counts, then to CPUE by dividing by the effort used
+    fit_count = exp(pred$fit),
+    lcl_count = exp(pred$fit - 1.96 * pred$se.fit),
+    ucl_count = exp(pred$fit + 1.96 * pred$se.fit),
+    fit_cpue  = fit_count / total_bottom,
+    lcl_cpue  = lcl_count / total_bottom,
+    ucl_cpue  = ucl_count / total_bottom
+  )
+
+# Observed reef-level CPUE and predicted CPUE at each observed reef (optional)
+pobs <- predict(m_nb, type = "link", se.fit = TRUE)
+dat <- dat %>%
+  mutate(
+    obs_cpue = total_cots / total_bottom,
+    fit_cpue = exp(pobs$fit) / total_bottom,
+    lcl_cpue = exp(pobs$fit - 1.96 * pobs$se.fit) / total_bottom,
+    ucl_cpue = exp(pobs$fit + 1.96 * pobs$se.fit) / total_bottom
+  )
+
+# ----- Plot -----
+ggplot(dat, aes(x = perc_pos_reef, y = obs_cpue)) +
+  geom_point(alpha = 0.7) +
+  geom_hline(yintercept = 0.04, linetype = "dashed", color = "purple") +
+  geom_ribbon(data = nd, aes(x = perc_pos_reef,ymin = lcl_cpue, ymax = ucl_cpue),
+              inherit.aes = FALSE, alpha = 0.6, fill="skyblue") +
+  geom_line(data = nd, aes(x = perc_pos_reef, y = fit_cpue), inherit.aes = FALSE, linewidth = 1) +
+  labs(
+    x = "% eDNA positive (reef-level)",
+    y = "CPUE (total_cots / total_bottom)",
+    title = "Reef-level CPUE vs eDNA (NegBin GLM with effort offset; 95% CI)"
+  ) +
+  # coord_cartesian(ylim = c(0, 0.1)) +
+  theme_bw()
+```
+
+## NB Model for Conc Mean
+
+```{r}
+library(dplyr)
+library(glmmTMB)
+library(ggplot2)
+library(tibble)
+dat <- reef_before %>%
+  mutate(
+    conc_t    = log1p(conc_mean_reef),              # stable transform, keeps zeros
+    obs_cpue  = total_cots / total_bottom
+  ) %>%
+  filter(!is.na(total_cots), !is.na(total_bottom), total_bottom > 0,
+         !is.na(perc_pos_reef), !is.na(conc_t), !is.na(Reef),
+         conc_mean_reef<5000) %>%
+  mutate(Reef = factor(Reef)) %>%
+  droplevels()
+
+effort_ref <- median(dat$total_bottom, na.rm = TRUE)
+
+m_nb_conc <- glmmTMB(
+  total_cots ~ conc_t + offset(log(total_bottom)) + (1|Reef),
+  family = nbinom2(),
+  data = dat
+)
+summary(m_nb_conc)
+
+# Prediction grid over concentration (hold effort fixed)
+nd_conc <- tibble(
+  conc_mean_reef = seq(min(dat$conc_mean_reef, na.rm=TRUE),
+                       max(dat$conc_mean_reef, na.rm=TRUE), length.out = 200),
+  conc_t = log1p(conc_mean_reef),
+  total_bottom = effort_ref,
+  Reef = NA
+)
+
+prc <- predict(m_nb_conc, newdata = nd_conc, type = "link", se.fit = TRUE, re.form = NA)
+nd_conc <- nd_conc %>%
+  mutate(
+    fit_cpue = exp(prc$fit) / total_bottom,
+    lcl_cpue = exp(prc$fit - 1.96*prc$se.fit) / total_bottom,
+    ucl_cpue = exp(prc$fit + 1.96*prc$se.fit) / total_bottom
+  )
+
+ggplot(dat, aes(x = log1p(conc_mean_reef), y = obs_cpue)) +
+  geom_point(alpha = 0.7) +
+  geom_hline(yintercept = 0.04, linetype = "dashed", colour = "purple") +
+  geom_ribbon(data = nd_conc, aes(x=log1p(conc_mean_reef),ymin = lcl_cpue, ymax = ucl_cpue),
+              inherit.aes = FALSE, alpha = 0.6, fill = "skyblue") +
+  geom_line(data = nd_conc, aes(x=log1p(conc_mean_reef),y = fit_cpue),
+            inherit.aes = FALSE, linewidth = 1) +
+  scale_x_continuous(trans = scales::pseudo_log_trans(sigma = 1)) +
+  labs(x = "Mean concentration (pseudo-log axis)",
+       y = "CPUE (total_cots / total_bottom)",
+       title = "NegBin (counts) ~ log1p(conc) + offset(log effort) + (1|Reef)") +
+  theme_bw()
+
+
+```
+## NB Model both predictors
+
+```{r}
+m_nb_both <- glmmTMB(
+  total_cots ~ perc_pos_reef*conc_t + offset(log(total_bottom)) + (1|Reef),
+  family = nbinom2(),
+  data = dat
+)
+summary(m_nb_both)
+
+effort_ref <- median(dat$total_bottom, na.rm = TRUE)
+
+perc_seq <- seq(min(dat$perc_pos_reef, na.rm=TRUE),
+                max(dat$perc_pos_reef, na.rm=TRUE), length.out = 120)
+conc_seq <- seq(min(dat$conc_mean_reef, na.rm=TRUE),
+                max(dat$conc_mean_reef, na.rm=TRUE), length.out = 120)
+
+grid <- tidyr::expand_grid(
+  perc_pos_reef  = perc_seq,
+  conc_mean_reef = conc_seq
+) %>%
+  mutate(
+    conc_t       = log1p(conc_mean_reef),
+    total_bottom = effort_ref,
+    Reef         = NA
+  )
+
+pr <- predict(m_nb_both, newdata = grid, type = "link", se.fit = TRUE, re.form = NA)
+grid <- grid %>% mutate(fit_cpue = exp(pr$fit) / total_bottom)
+
+dx <- diff(range(perc_seq)) / (length(perc_seq) - 1)
+dy <- diff(range(conc_seq)) / (length(conc_seq) - 1)
+
+ggplot(grid, aes(perc_pos_reef, conc_mean_reef, fill = fit_cpue)) +
+  geom_tile(width = dx, height = dy) +                # <- force full tiles
+  geom_contour(aes(z = fit_cpue), colour = "black", linewidth = 0.3) +
+  scale_fill_viridis_c(name = "Pred. CPUE") +
+  labs(x = "% eDNA positive (reef-level)", y = "Mean concentration",
+       title = "Predicted CPUE surface (NegBin with interaction; RE excluded)") +
+  theme_bw()
+
+
+conc_levels <- quantile(dat$conc_mean_reef, probs = c(0.1, 0.5, 0.9), na.rm = TRUE)
+
+nd_perc <- tibble(
+  perc_pos_reef = rep(seq(min(dat$perc_pos_reef, na.rm=TRUE),
+                          max(dat$perc_pos_reef, na.rm=TRUE), length.out = 200),
+                      times = length(conc_levels)),
+  conc_mean_reef = rep(as.numeric(conc_levels), each = 200)
+) %>%
+  mutate(
+    conc_t       = log1p(conc_mean_reef),
+    total_bottom = effort_ref,
+    Reef         = NA,
+    conc_lab     = paste0("conc≈", scales::label_number(accuracy = 1)(conc_mean_reef))
+  )
+
+pr_perc <- predict(m_nb_both, newdata = nd_perc, type = "link", se.fit = TRUE, re.form = NA)
+nd_perc <- nd_perc %>%
+  mutate(
+    fit_cpue = exp(pr_perc$fit) / total_bottom,
+    lcl_cpue = exp(pr_perc$fit - 1.96*pr_perc$se.fit) / total_bottom,
+    ucl_cpue = exp(pr_perc$fit + 1.96*pr_perc$se.fit) / total_bottom
+  )
+
+ggplot(dat, aes(perc_pos_reef, total_cots/total_bottom)) +
+  geom_point(alpha = 0.5) +
+  geom_hline(yintercept = 0.04, linetype = "dashed", colour = "purple") +
+  geom_ribbon(data = nd_perc, aes(x=perc_pos_reef, ymin = lcl_cpue, ymax = ucl_cpue, fill = conc_lab),
+              alpha = 0.2, inherit.aes = FALSE) +
+  geom_line(data = nd_perc, aes(x=perc_pos_reef, y = fit_cpue, colour = conc_lab),
+            linewidth = 1, inherit.aes = FALSE) +
+  labs(x = "% eDNA positive (reef-level)",
+       y = "CPUE (total_cots / total_bottom)",
+       colour = "Concentration slice",
+       fill   = "Concentration slice",
+       title = "CPUE vs % positive at different concentrations (interaction model)") +
+  theme_bw()
+
+perc_levels <- quantile(dat$perc_pos_reef, probs = c(0.1, 0.5, 0.9), na.rm = TRUE)
+
+nd_conc <- tibble(
+  conc_mean_reef = rep(seq(min(dat$conc_mean_reef, na.rm=TRUE),
+                           max(dat$conc_mean_reef, na.rm=TRUE), length.out = 200),
+                       times = length(perc_levels)),
+  perc_pos_reef  = rep(as.numeric(perc_levels), each = 200)
+) %>%
+  mutate(
+    conc_t       = log1p(conc_mean_reef),
+    total_bottom = effort_ref,
+    Reef         = NA,
+    perc_lab     = paste0("%pos≈", scales::number(perc_pos_reef, accuracy = 0.1))
+  )
+
+pr_conc <- predict(m_nb_both, newdata = nd_conc, type = "link", se.fit = TRUE, re.form = NA)
+nd_conc <- nd_conc %>%
+  mutate(
+    fit_cpue = exp(pr_conc$fit) / total_bottom,
+    lcl_cpue = exp(pr_conc$fit - 1.96*pr_conc$se.fit) / total_bottom,
+    ucl_cpue = exp(pr_conc$fit + 1.96*pr_conc$se.fit) / total_bottom
+  )
+
+ggplot(dat, aes(x=log1p(conc_mean_reef), total_cots/total_bottom)) +
+  geom_point(alpha = 0.5) +
+  geom_hline(yintercept = 0.04, linetype = "dashed", colour = "purple") +
+  geom_ribbon(data = nd_conc, aes(x=log1p(conc_mean_reef),ymin = lcl_cpue, ymax = ucl_cpue, fill = perc_lab),
+              alpha = 0.2, inherit.aes = FALSE) +
+  geom_line(data = nd_conc, aes(x=log1p(conc_mean_reef),y = fit_cpue, colour = perc_lab),
+            linewidth = 1, inherit.aes = FALSE) +
+  scale_x_continuous(trans = scales::pseudo_log_trans(sigma = 1),
+                     breaks = scales::pretty_breaks(6)) +
+  labs(x = "Mean concentration (pseudo-log axis)",
+       y = "CPUE (total_cots / total_bottom)",
+       colour = "% positive slice",
+       fill   = "% positive slice",
+       title = "CPUE vs concentration at different % positive (interaction model)") +
+  theme_bw()
+```
+
+
+## GAM Model - % Pos and Conc Mean
+
+```{r}
+library(mgcv)     # GAMs
+library(dplyr)
+library(ggplot2)
+library(tibble)
+
+dat <- reef_before %>%
+  mutate(
+    conc_t     = log1p(conc_mean_reef),       # stable transform, defined at 0
+    obs_cpue   = total_cots / total_bottom
+  ) %>%
+  filter(
+    !is.na(total_cots),
+    !is.na(total_bottom),
+    total_bottom > 0,                          # avoid log(0)
+    !is.na(conc_t),
+    !is.na(Reef),
+    conc_mean_reef<5000
+  ) %>%
+  mutate(Reef = factor(Reef)) %>%
+  droplevels()
+
+effort_ref <- median(dat$total_bottom, na.rm = TRUE)
+reef_ref   <- dat$Reef[1]  # any valid level; RE term is excluded in predictions
+
+
+# Fit: counts ~ s(%pos) + RE(reef) + offset(log(effort)) with NegBin
+g_perc <- gam(
+  total_cots ~ s(perc_pos_reef, k = 3) + s(Reef, bs = "re") + offset(log(total_bottom)),
+  family = nb(), method = "REML",
+  data = dat
+)
+summary(g_perc)
+
+# Prediction grid over %pos at reference effort
+nd_perc <- tibble(
+  perc_pos_reef = seq(min(dat$perc_pos_reef, na.rm = TRUE),
+                      max(dat$perc_pos_reef, na.rm = TRUE),
+                      length.out = 200),
+  total_bottom = effort_ref,
+  Reef = reef_ref
+)
+
+# Population-level predictions (exclude random effect term)
+pp_perc <- predict(g_perc, newdata = nd_perc, type = "link", se.fit = TRUE,
+                   exclude = "s(Reef)")
+
+nd_perc <- nd_perc %>%
+  mutate(
+    fit_count = exp(pp_perc$fit),
+    lcl_count = exp(pp_perc$fit - 1.96 * pp_perc$se.fit),
+    ucl_count = exp(pp_perc$fit + 1.96 * pp_perc$se.fit),
+    fit_cpue  = fit_count / total_bottom,
+    lcl_cpue  = lcl_count / total_bottom,
+    ucl_cpue  = ucl_count / total_bottom
+  )
+
+# Optional: fitted CPUE at observed reefs (population-level)
+pobs_perc <- predict(g_perc, newdata = dat, type = "link", se.fit = TRUE,
+                     exclude = "s(Reef)")
+dat_perc <- dat %>%
+  mutate(
+    fit_cpue = exp(pobs_perc$fit) / total_bottom,
+    lcl_cpue = exp(pobs_perc$fit - 1.96 * pobs_perc$se.fit) / total_bottom,
+    ucl_cpue = exp(pobs_perc$fit + 1.96 * pobs_perc$se.fit) / total_bottom
+  )
+
+# Plot
+ggplot(dat_perc, aes(x = perc_pos_reef, y = obs_cpue)) +
+  geom_point(alpha = 0.7) +
+  geom_hline(yintercept = 0.04, linetype = "dashed", color = "purple") +
+  geom_ribbon(data = nd_perc,
+              aes(x = perc_pos_reef, ymin = lcl_cpue, ymax = ucl_cpue),
+              inherit.aes = FALSE, alpha = 0.6, fill = "skyblue") +
+  geom_line(data = nd_perc,
+            aes(x = perc_pos_reef,y = fit_cpue),
+            inherit.aes = FALSE, linewidth = 1) +
+  labs(
+    x = "% eDNA positive (reef-level)",
+    y = "CPUE (total_cots / total_bottom)",
+    title = "Reef-level CPUE vs eDNA % positive (GAM: NB, offset, RE; 95% CI)"
+  ) +
+  theme_bw()
+
+
+# Fit: counts ~ s(log1p(conc)) + RE(reef) + offset(log(effort)) with NegBin
+g_conc <- gam(
+  total_cots ~ s(conc_t, k = 3) + s(Reef, bs = "re") + offset(log(total_bottom)),
+  family = nb(), method = "REML",
+  data = dat
+)
+summary(g_conc)
+
+# Prediction grid over original concentration scale (we'll transform to conc_t)
+nd_conc <- tibble(
+  conc_mean_reef = seq(min(dat$conc_mean_reef, na.rm = TRUE),
+                       max(dat$conc_mean_reef, na.rm = TRUE),
+                       length.out = 200),
+  conc_t       = log1p(conc_mean_reef),
+  total_bottom = effort_ref,
+  Reef         = reef_ref
+)
+
+pp_conc <- predict(g_conc, newdata = nd_conc, type = "link", se.fit = TRUE,
+                   exclude = "s(Reef)")
+
+nd_conc <- nd_conc %>%
+  mutate(
+    fit_count = exp(pp_conc$fit),
+    lcl_count = exp(pp_conc$fit - 1.96 * pp_conc$se.fit),
+    ucl_count = exp(pp_conc$fit + 1.96 * pp_conc$se.fit),
+    fit_cpue  = fit_count / total_bottom,
+    lcl_cpue  = lcl_count / total_bottom,
+    ucl_cpue  = ucl_count / total_bottom
+  )
+
+# Optional: fitted CPUE at observed reefs (population-level)
+pobs_conc <- predict(g_conc, newdata = dat, type = "link", se.fit = TRUE,
+                     exclude = "s(Reef)")
+dat_conc <- dat %>%
+  mutate(
+    fit_cpue = exp(pobs_conc$fit) / total_bottom,
+    lcl_cpue = exp(pobs_conc$fit - 1.96 * pobs_conc$se.fit) / total_bottom,
+    ucl_cpue = exp(pobs_conc$fit + 1.96 * pobs_conc$se.fit) / total_bottom
+  )
+
+# Plot
+ggplot(dat_conc, aes(x = log1p(conc_mean_reef), y = obs_cpue)) +
+  geom_point(alpha = 0.7) +
+  geom_hline(yintercept = 0.04, linetype = "dashed", color = "purple") +
+  geom_ribbon(data = nd_conc,
+              aes(x = log1p(conc_mean_reef),ymin = lcl_cpue, ymax = ucl_cpue),
+              inherit.aes = FALSE, alpha = 0.6, fill = "skyblue") +
+  geom_line(data = nd_conc,
+            aes(x = log1p(conc_mean_reef),y = fit_cpue),
+            inherit.aes = FALSE, linewidth = 1) +
+  scale_x_continuous(trans = scales::pseudo_log_trans(sigma = 1),
+                     breaks = scales::pretty_breaks(6)) +
+  labs(
+    x = "Mean concentration (pseudo-log axis)",
+    y = "CPUE (total_cots / total_bottom)",
+    title = "Reef-level CPUE vs eDNA concentration (GAM: NB, offset, RE; 95% CI)"
+  ) +
+  theme_bw()
+
+
+
+```
+
+
+## COnfusion matrix
+
+```{r}
+library(tidyr)
+# 0) Pick your dataset and standardise column names ---------------------------
+# Event-level example:
+dat_evt <- reef_before %>%
+  mutate(
+    reef = Reef,
+    counts = total_cots,
+    cpue   = cpue_reef,
+    perc_pos = perc_pos_reef   # already named perc_pos in earlier steps
+  ) %>%
+  dplyr::select(reef,perc_pos, cpue)
+
+# 1) Build confusion matrix and metrics for given thresholds ------------------
+make_confusion <- function(dat, perc_thresh, cpue_thresh) {
+  classified <- dat %>%
+    mutate(
+      pred   = if_else(perc_pos >= perc_thresh, "Pred +", "Pred -"),
+      actual = if_else(cpue     >= cpue_thresh, "Actual +", "Actual -")
+    )
+
+    # counts per cell (ensure all 4 exist)
+    cm <- classified %>%
+      count(actual, pred, .drop = FALSE) %>%
+      complete(actual = c("Actual +","Actual -"),
+               pred   = c("Pred +","Pred -"),
+               fill   = list(n = 0)) %>%
+      group_by(actual) %>%
+      mutate(row_prop = n / sum(n)) %>%
+      ungroup() %>%
+      mutate(label = paste0(n, "\n", scales::percent(row_prop, accuracy = 0.1)))
+
+    # overall metrics
+    TP <- cm$n[cm$actual=="Actual +" & cm$pred=="Pred +"]
+    FP <- cm$n[cm$actual=="Actual -" & cm$pred=="Pred +"]
+    TN <- cm$n[cm$actual=="Actual -" & cm$pred=="Pred -"]
+    FN <- cm$n[cm$actual=="Actual +" & cm$pred=="Pred -"]
+
+    acc <- (TP + TN) / (TP + TN + FP + FN + 1e-9)
+    sens <- TP / (TP + FN + 1e-9)   # recall / TPR
+    spec <- TN / (TN + FP + 1e-9)
+    prec <- TP / (TP + FP + 1e-9)   # PPV
+    f1   <- 2 * prec * sens / (prec + sens + 1e-9)
+
+    list(
+      cm = cm,
+      metrics = tibble(
+        perc_thresh = perc_thresh,
+        cpue_thresh = cpue_thresh,
+        Accuracy = acc,
+        Sensitivity_TPR = sens,
+        Specificity_TNR = spec,
+        Precision_PPV = prec,
+        F1 = f1
+      )
+    )
+}
+
+# 2) Plot the confusion matrix ------------------------------------------------
+plot_confusion <- function(cm_obj, title = "Confusion matrix") {
+  cm <- cm_obj$cm
+  ggplot(cm, aes(x = pred, y = actual, fill = n)) +
+    geom_tile(color = "grey30") +
+    geom_text(aes(label = label), size = 5) +
+    scale_fill_gradient(low = "white", high = "steelblue") +
+    labs(x = "Prediction from eDNA (% pos)", y = "Ground truth from CPUE",
+         title = title, fill = "Count") +
+    coord_fixed() +
+    theme_bw() +
+    theme(panel.grid = element_blank())
+}
+
+
+
+# 3) Example use: set thresholds and draw ------------------------------------
+# eDNA threshold in percent-pos units, CPUE threshold in COTS per unit effort
+perc_thresh <- 50
+# e.g., classify as positive if ≥20% samples +ve
+cpue_thresh <- 0.02 # e.g., ≥0.05 COTS per minute (adjust to your units)
+
+res <- make_confusion(dat_evt, perc_thresh, cpue_thresh)
+print(res$metrics)
+
+plot_confusion(res,
+  title = sprintf("Confusion matrix (perc ≥ %.1f, CPUE ≥ %.3f)", perc_thresh, cpue_thresh)
+)
+```
+
+```{r}
+
+# 1) Standardise data (event- or reef-level)
+dat_evt <- reef_before %>%
+  mutate(
+    reef = Reef,
+    counts = total_cots,
+    cpue   = cpue_reef,
+    perc_pos = perc_pos_reef   # already named perc_pos in earlier steps
+  ) %>%
+  dplyr::select(reef,perc_pos, cpue)
+
+# dat_evt <- before6 %>%
+#   mutate(
+#     reef = Reef,
+#     counts = Cohort1 + Cohort2 + Cohort3 + Cohort4,
+#     cpue   = counts / Bottomtime,
+#     perc_pos = perc_pos   # already named perc_pos in earlier steps
+#   ) %>%
+#   dplyr::select(reef, date_cull, perc_pos, cpue)
+
+
+# 2) Regular grids (even spacing)
+perc_grid <- seq(0, 100, by = 2)
+cpue_grid <- seq(0, quantile(dat_evt$cpue, 0.99, na.rm = TRUE), length.out = 40)
+
+# 3) Confusion + metrics helper
+metrics_for <- function(p_thr, c_thr, x = dat_evt) {
+  pred   <- x$perc_pos >= p_thr
+  actual <- x$cpue     >= c_thr
+  TP <- sum(pred &  actual)
+  FP <- sum(pred & !actual)
+  TN <- sum(!pred & !actual)
+  FN <- sum(!pred &  actual)
+  prec <- TP / (TP + FP + 1e-9)
+  rec  <- TP / (TP + FN + 1e-9)
+  f1   <- 2 * prec * rec / (prec + rec + 1e-9)
+  acc  <- (TP + TN) / (TP + TN + FP + FN + 1e-9)
+  c(F1 = f1, Accuracy = acc)
+}
+
+# 4) Evaluate on the grid
+grid <- tidyr::expand_grid(perc_thresh = perc_grid, cpue_thresh = cpue_grid) %>%
+  mutate(
+    out = purrr::pmap(., ~ metrics_for(..1, ..2)),
+    F1 = vapply(out, `[[`, numeric(1), "F1"),
+    Accuracy = vapply(out, `[[`, numeric(1), "Accuracy")
+  ) %>%
+  dplyr::select(-out)
+
+# 5) Heatmap (no stripes)
+ggplot(grid, aes(x = perc_thresh, y = cpue_thresh, fill = F1)) +
+  geom_raster() +
+  scale_fill_viridis_c() +
+  labs(x = "eDNA % positive threshold", y = "CPUE threshold", fill = "F1",
+       title = "F1 score across thresholds") +
+  theme_bw()
+
+# 1) Best overall operating point
+best <- grid %>% slice_max(F1, n = 1)
+
+# 2) Optional: for each CPUE threshold, best eDNA threshold (profile line)
+frontier <- grid %>%
+  group_by(cpue_thresh) %>%
+  slice_max(F1, n = 1, with_ties = FALSE) %>%
+  ungroup()
+
+# 3) Plot with contours + optimum + frontier
+ggplot(grid, aes(x = perc_thresh, y = cpue_thresh, fill = F1)) +
+  geom_raster() +
+  # iso-F1 contours (labelled levels every 0.1)
+  geom_contour(aes(z = F1), breaks = seq(0.2, 1, by = 0.2),
+               colour = "black", linewidth = 0.3, alpha = 0.7) +
+  # # best overall point
+  # geom_point(data = best, aes(x = perc_thresh, y = cpue_thresh),
+  #            colour = "red", size = 3) +
+  # ggrepel::geom_text_repel(
+  #   data = best,
+  #   aes(x = perc_thresh, y = cpue_thresh,
+  #       label = sprintf("Best\nperc≈%.0f  cpue≈%.3f\nF1=%.2f",
+  #                       perc_thresh, cpue_thresh, F1)),
+  #   min.segment.length = 0, size = 3
+  # ) +
+  # “frontier”: best eDNA threshold for each CPUE threshold
+  geom_line(data = frontier,
+            aes(x = perc_thresh, y = cpue_thresh),
+            colour = "red", linewidth = 0.7, linetype = 2) +
+  scale_fill_viridis_c(limits = c(0, 1)) +
+  coord_cartesian(ylim = c(0, 0.2)) +
+  labs(x = "eDNA % positive threshold",
+       y = "CPUE threshold",
+       fill = "F1",
+       title = "F1 across thresholds with iso-F1 contours") +
+  theme_bw()
+
+```
+
+## Confusion matrix - conc mean
+
+```{r}
+dat_evt <- reef_before %>%
+  transmute(
+    reef      = Reef,
+    cpue      = cpue_reef,
+    perc_pos  = perc_pos_reef,
+    conc_mean = conc_mean_reef
+  ) %>%
+  tidyr::drop_na(cpue, perc_pos, conc_mean)
+
+# grids
+conc_grid <- seq(0, quantile(dat_evt$conc_mean, 0.95, na.rm = TRUE), length.out = 40)
+cpue_grid <- seq(0, quantile(dat_evt$cpue,      0.99, na.rm = TRUE), length.out = 40)
+
+metrics_for_conc <- function(conc_thr, cpue_thr, x = dat_evt) {
+  pred   <- x$conc_mean >= conc_thr
+  actual <- x$cpue      >= cpue_thr
+  TP <- sum(pred &  actual); FP <- sum(pred & !actual)
+  TN <- sum(!pred & !actual); FN <- sum(!pred &  actual)
+  prec <- TP / (TP + FP + 1e-9); rec <- TP / (TP + FN + 1e-9)
+  f1   <- 2*prec*rec / (prec + rec + 1e-9)
+  acc  <- (TP + TN) / (TP + TN + FP + FN + 1e-9)
+  c(F1 = f1, Accuracy = acc)
+}
+
+grid_conc <- tidyr::expand_grid(conc_thresh = conc_grid, cpue_thresh = cpue_grid) %>%
+  mutate(out = purrr::pmap(., ~ metrics_for_conc(..1, ..2)),
+         F1 = vapply(out, `[[`, numeric(1), "F1"),
+         Accuracy = vapply(out, `[[`, numeric(1), "Accuracy")) %>%
+  dplyr::select(-out)
+
+ggplot(grid_conc, aes(x = conc_thresh, y = cpue_thresh, fill = F1)) +
+  geom_raster() +
+  scale_fill_viridis_c() +
+  labs(x = "Concentration threshold", y = "CPUE threshold", fill = "F1",
+       title = "F1 across thresholds (concentration only)") +
+  theme_bw()
+
+```
+## Heatmap for CPUE vs eDNA %pos and conc mean
+
+```{r}
+metrics_for_both <- function(p_thr, c_thr, cpue_thr, rule = c("or","and"), x = dat_evt) {
+  rule <- match.arg(rule)
+  pred <- if (rule == "or") {
+    (x$perc_pos >= p_thr) | (x$conc_mean >= c_thr)
+  } else {
+    (x$perc_pos >= p_thr) & (x$conc_mean >= c_thr)
+  }
+  actual <- x$cpue >= cpue_thr
+  TP <- sum(pred &  actual); FP <- sum(pred & !actual)
+  TN <- sum(!pred & !actual); FN <- sum(!pred &  actual)
+  prec <- TP / (TP + FP + 1e-9); rec <- TP / (TP + FN + 1e-9)
+  f1   <- 2*prec*rec / (prec + rec + 1e-9)
+  acc  <- (TP + TN) / (TP + TN + FP + FN + 1e-9)
+  c(F1 = f1, Accuracy = acc)
+}
+cpue_star <- 0.02  # set your management threshold
+
+perc_grid <- seq(0, 100, by = 2)
+conc_grid <- seq(0, quantile(dat_evt$conc_mean, 0.95, na.rm = TRUE), length.out = 60)
+
+# OR rule
+grid_both_or <- tidyr::expand_grid(perc_thresh = perc_grid, conc_thresh = conc_grid) %>%
+  mutate(out = purrr::pmap(., ~ metrics_for_both(..1, ..2, cpue_star, rule = "or")),
+         F1 = vapply(out, `[[`, numeric(1), "F1"),
+         Accuracy = vapply(out, `[[`, numeric(1), "Accuracy")) %>%
+  dplyr::select(-out)
+
+ggplot(grid_both_or, aes(x = perc_thresh, y = conc_thresh, fill = F1)) +
+  geom_raster() +
+  geom_contour(aes(z = F1), breaks = seq(0.2, 0.9, by = 0.2),
+               colour = "black", linewidth = 0.3) +
+  scale_fill_viridis_c(limits = c(0,1)) +
+  labs(x = "eDNA % positive threshold",
+       y = "Concentration threshold",
+       fill = "F1",
+       title = sprintf("F1 for OR rule (CPUE ≥ %.3f)", cpue_star)) +
+  theme_bw()
+
+# AND rule
+grid_both_and <- tidyr::expand_grid(perc_thresh = perc_grid, conc_thresh = conc_grid) %>%
+  mutate(out = purrr::pmap(., ~ metrics_for_both(..1, ..2, cpue_star, rule = "and")),
+         F1 = vapply(out, `[[`, numeric(1), "F1"),
+         Accuracy = vapply(out, `[[`, numeric(1), "Accuracy")) %>%
+  dplyr::select(-out)
+
+ggplot(grid_both_and, aes(x = perc_thresh, y = conc_thresh, fill = F1)) +
+  geom_raster() +
+  geom_contour(aes(z = F1), breaks = seq(0.2, 0.9, by = 0.2),
+               colour = "black", linewidth = 0.3) +
+  scale_fill_viridis_c(limits = c(0,1)) +
+  labs(x = "eDNA % positive threshold",
+       y = "Concentration threshold",
+       fill = "F1",
+       title = sprintf("F1 for AND rule (CPUE ≥ %.3f)", cpue_star)) +
+  theme_bw()
+```
+
+```{r}
+best_or  <- grid_both_or  %>% slice_max(F1, n = 1)
+best_and <- grid_both_and %>% slice_max(F1, n = 1)
+
+best_or
+best_and
+
 ```
 
