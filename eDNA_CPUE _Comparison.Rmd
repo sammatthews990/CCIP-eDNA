@@ -29,8 +29,18 @@ cull.dat <- read_excel("data/250929_COTS-Manta-Cull-RHIS-Data-Matthews-and-Schla
                         sheet = "Cull")
 # edna.dat <- read_excel("data/CCIP-RT-02 eDNA data.xlsx", sheet =1)
 edna.dat <- read.csv("data/eDNA data_ALL.csv") |>
-  mutate(Conc_mean = as.numeric(Conc_mean)) |>
-  filter(Collection.organisation == "AIMS")
+  mutate(Conc_mean = as.numeric(Conc_mean)) #|>
+  #filter(Collection.organisation == "AIMS")
+
+# edna.dat from AIMS link
+edna.dat <- read.csv("data/eDNA data_ALL.csv") |>
+  mutate(Conc_mean = as.numeric(Conc_mean)) #|>
+  #filter(Collection.organisation == "AIMS")
+
+# # edna.dat <- read_excel("data/CCIP-RT-02 eDNA data.xlsx", sheet =1)
+# edna.dat.others <- read.csv("data/eDNA data_ALL.csv") |>
+#   mutate(Conc_mean = as.numeric(Conc_mean)) |>
+#   filter(!Collection.organisation == "AIMS")
 
 # Make clean copies with consistent names
 cull <- cull.dat %>%
@@ -42,11 +52,12 @@ edna_agg <- edna.dat %>%
   # rename for consistency; update "Date" if your column differs
   mutate(
     Reef      = ReefName,
+    Collection.org = ifelse(Collection.organisation=="AIMS", "AIMS", "Other"),
     date_edna = as.Date(Date, format = "%d/%m/%Y"),
     Conc_mean = as.numeric(Conc_mean)
   ) %>%
   arrange(Reef, Year, date_edna) %>%
-  group_by(Reef, Year) %>%
+  group_by(Reef, Collection.org, Year) %>%
   # cluster rows into groups where consecutive samples are ≤ 7 days apart
   mutate(
     grp = cumsum(
@@ -57,7 +68,7 @@ edna_agg <- edna.dat %>%
       )
     )
   ) %>% ungroup() %>%
-  group_by(Reef, Year, grp) %>%
+  group_by(Reef, Collection.org, Year, grp) %>%
   summarise(
     date_edna = min(date_edna), # representative date (or use mean)
     conc_mean = mean(Conc_mean, na.rm = TRUE),
@@ -127,7 +138,7 @@ same6_any_closest <- same6_any %>%
   ungroup()
 
 reef_any <- same6_any %>%
-  group_by(Reef) %>%
+  group_by(Reef, Collection.org) %>%
   summarise(
     # reef-level CPUE: total COTS / total bottom time over matched events
     total_cots      = sum(Cohort1 + Cohort2 + Cohort3 + Cohort4, na.rm = TRUE),
@@ -143,7 +154,7 @@ reef_any <- same6_any %>%
   )
 
 reef_any_closest <- same6_any_closest %>%
-  group_by(Reef) %>%
+  group_by(Reef, Collection.org) %>%
   summarise(
     # reef-level CPUE: total COTS / total bottom time over matched events
     total_cots      = sum(Cohort1 + Cohort2 + Cohort3 + Cohort4, na.rm = TRUE),
@@ -182,7 +193,7 @@ before6_closest <- before6 %>%
   ungroup()
 
 reef_before <- before6 %>%
-  group_by(Reef, Year, grp) %>%
+  group_by(Reef, Collection.org, Year, grp) %>%
   summarise(
     # reef-level CPUE: total COTS / total bottom time over matched events
     total_cots      = sum(Cohort1 + Cohort2 + Cohort3 + Cohort4, na.rm = TRUE),
@@ -198,7 +209,7 @@ reef_before <- before6 %>%
   )
 
 reef_before_closest <- before6_closest %>%
-  group_by(Reef, Year, grp) %>%
+  group_by(Reef, Collection.org,Year, grp) %>%
   summarise(
     # reef-level CPUE: total COTS / total bottom time over matched events
     total_cots      = sum(Cohort1 + Cohort2 + Cohort3 + Cohort4, na.rm = TRUE),
@@ -217,7 +228,7 @@ reef_before_closest <- before6_closest %>%
 # Plot Comparison
 
 ```{r}
-ggplot(reef_any, aes(x = perc_pos_reef, y = cpue_reef)) +
+ggplot(reef_any, aes(x = perc_pos_reef, y = cpue_reef, fill = Collection.org,, color=Collection.org)) +
   geom_point(size = 2) +
   geom_smooth(method = "lm", se = TRUE) +
   labs(
@@ -227,7 +238,7 @@ ggplot(reef_any, aes(x = perc_pos_reef, y = cpue_reef)) +
   ) +
   theme_bw()
 
-ggplot(reef_any, aes(x = log(conc_mean_reef), y = cpue_reef)) +
+ggplot(reef_any, aes(x = log(conc_mean_reef), y = cpue_reef,fill = Collection.org,, color=Collection.org)) +
   geom_point(size = 2) +
   geom_smooth(method = "lm", se = TRUE) +
   labs(
@@ -238,13 +249,13 @@ ggplot(reef_any, aes(x = log(conc_mean_reef), y = cpue_reef)) +
   theme_bw()
 
 
-ggplot(reef_any, aes(x = log1p(conc_mean_reef), y = cpue_reef)) +
+ggplot(reef_any, aes(x = log1p(conc_mean_reef), y = cpue_reef,fill = Collection.org, color=Collection.org)) +
   geom_point(size = 2) +
   geom_smooth(method = "lm", se = TRUE) +
   labs(x = "log1p(mean concentration)", y = "CPUE") +
   theme_bw()
 
-ggplot(reef_any, aes(x = asinh(conc_mean_reef), y = cpue_reef)) +
+ggplot(reef_any, aes(x = asinh(conc_mean_reef), y = cpue_reef,fill = Collection.org, color=Collection.org)) +
   geom_point(size = 2) +
   geom_smooth(method = "lm", se = TRUE) +
   labs(x = "asinh(mean concentration)", y = "CPUE") +
@@ -304,7 +315,7 @@ lm_label <- function(model,
 ```
 
 ```{r}
-ggplot(reef_before, aes(x = perc_pos_reef, y = cpue_reef)) +
+ggplot(reef_before, aes(x = perc_pos_reef, y = cpue_reef,fill = Collection.org, color=Collection.org)) +
   geom_point(size = 2) +
   geom_smooth(method = "lm", se = TRUE) +
   labs(
@@ -314,7 +325,7 @@ ggplot(reef_before, aes(x = perc_pos_reef, y = cpue_reef)) +
   ) +
   theme_bw()
 
-ggplot(reef_before_closest, aes(x = perc_pos_reef, y = cpue_reef)) +
+ggplot(reef_before_closest, aes(x = perc_pos_reef, y = cpue_reef,fill = Collection.org, color=Collection.org)) +
   geom_point(size = 2) +
   geom_smooth(method = "lm", se = TRUE) +
   labs(
@@ -425,7 +436,7 @@ dat <- dat %>%
   )
 
 # ----- Plot -----
-ggplot(dat, aes(x = perc_pos_reef, y = obs_cpue)) +
+ggplot(dat, aes(x = perc_pos_reef, y = obs_cpue,fill = Collection.org, color=Collection.org)) +
   geom_point(alpha = 0.7) +
   geom_hline(yintercept = 0.04, linetype = "dashed", color = "purple") +
   geom_ribbon(data = nd, aes(x = perc_pos_reef,ymin = lcl_cpue, ymax = ucl_cpue),
@@ -491,7 +502,7 @@ ggplot(dat, aes(x = log1p(conc_mean_reef), y = obs_cpue)) +
               inherit.aes = FALSE, alpha = 0.6, fill = "skyblue") +
   geom_line(data = nd_conc, aes(x=log1p(conc_mean_reef),y = fit_cpue),
             inherit.aes = FALSE, linewidth = 1) +
-  scale_x_continuous(trans = scales::pseudo_log_trans(sigma = 1)) +
+  # scale_x_continuous(trans = scales::pseudo_log_trans(sigma = 1)) +
   labs(x = "Mean concentration (pseudo-log axis)",
        y = "CPUE (total_cots / total_bottom)",
        title = "NegBin (counts) ~ log1p(conc) + offset(log effort) + (1|Reef)") +
@@ -775,6 +786,7 @@ ggplot(dat_conc, aes(x = log1p(conc_mean_reef), y = obs_cpue)) +
 
 ```{r}
 library(tidyr)
+library(patchwork)
 # 0) Pick your dataset and standardise column names ---------------------------
 # Event-level example:
 dat_evt <- reef_before %>%
@@ -784,7 +796,7 @@ dat_evt <- reef_before %>%
     cpue   = cpue_reef,
     perc_pos = perc_pos_reef   # already named perc_pos in earlier steps
   ) %>%
-  dplyr::select(reef,perc_pos, cpue)
+  dplyr::select(reef,Collection.org, perc_pos, cpue)
 
 # 1) Build confusion matrix and metrics for given thresholds ------------------
 make_confusion <- function(dat, perc_thresh, cpue_thresh) {
@@ -849,16 +861,24 @@ plot_confusion <- function(cm_obj, title = "Confusion matrix") {
 
 # 3) Example use: set thresholds and draw ------------------------------------
 # eDNA threshold in percent-pos units, CPUE threshold in COTS per unit effort
-perc_thresh <- 50
+perc_thresh <- 48
 # e.g., classify as positive if ≥20% samples +ve
 cpue_thresh <- 0.02 # e.g., ≥0.05 COTS per minute (adjust to your units)
 
-res <- make_confusion(dat_evt, perc_thresh, cpue_thresh)
+res <- make_confusion(dat_evt %>% filter(Collection.org=="AIMS"), perc_thresh, cpue_thresh)
 print(res$metrics)
 
-plot_confusion(res,
-  title = sprintf("Confusion matrix (perc ≥ %.1f, CPUE ≥ %.3f)", perc_thresh, cpue_thresh)
+p1 = plot_confusion(res,
+  title = sprintf("AIMS (perc ≥ %.1f, CPUE ≥ %.3f)", perc_thresh, cpue_thresh)
 )
+
+res.others <- make_confusion(dat_evt %>% filter(Collection.org=="Other"), perc_thresh, cpue_thresh)
+print(res.others$metrics)
+
+p2 = plot_confusion(res.others,
+  title = sprintf("Other (perc ≥ %.1f, CPUE ≥ %.3f)", perc_thresh, cpue_thresh)
+)
+p1/p2
 ```
 
 ```{r}
@@ -871,7 +891,9 @@ dat_evt <- reef_before %>%
     cpue   = cpue_reef,
     perc_pos = perc_pos_reef   # already named perc_pos in earlier steps
   ) %>%
-  dplyr::select(reef,perc_pos, cpue)
+  # filter(Collection.org=="AIMS") %>%
+  dplyr::select(reef,perc_pos, cpue)%>%
+  drop_na()
 
 # dat_evt <- before6 %>%
 #   mutate(
@@ -899,8 +921,22 @@ metrics_for <- function(p_thr, c_thr, x = dat_evt) {
   rec  <- TP / (TP + FN + 1e-9)
   f1   <- 2 * prec * rec / (prec + rec + 1e-9)
   acc  <- (TP + TN) / (TP + TN + FP + FN + 1e-9)
-  c(F1 = f1, Accuracy = acc)
+  c(F1 = f1, Accuracy = acc, Precision = prec, Recall = rec)
 }
+
+
+# pick the best %pos threshold on TRAINING data (max F1, tie-break: simplest)
+best_threshold_train <- function(x_train, perc_grid, cpue_thr) {
+  res <- tibble(perc_thresh = perc_grid) %>%
+    mutate(out = map(perc_thresh, ~ metrics_for(.x, cpue_thr, x_train)),
+           F1  = vapply(out, `[[`, numeric(1), "F1")) %>%
+    dplyr::select(-out)
+
+  # choose smallest threshold among ties (more conservative; change if you prefer)
+  best <- res %>% filter(F1 == max(F1, na.rm = TRUE)) %>% slice_min(perc_thresh, with_ties = FALSE)
+  best$perc_thresh
+}
+
 
 # 4) Evaluate on the grid
 grid <- tidyr::expand_grid(perc_thresh = perc_grid, cpue_thresh = cpue_grid) %>%
@@ -949,7 +985,7 @@ ggplot(grid, aes(x = perc_thresh, y = cpue_thresh, fill = F1)) +
             aes(x = perc_thresh, y = cpue_thresh),
             colour = "red", linewidth = 0.7, linetype = 2) +
   scale_fill_viridis_c(limits = c(0, 1)) +
-  coord_cartesian(ylim = c(0, 0.2)) +
+  # coord_cartesian(ylim = c(0, 0.2)) +
   labs(x = "eDNA % positive threshold",
        y = "CPUE threshold",
        fill = "F1",
@@ -957,6 +993,739 @@ ggplot(grid, aes(x = perc_thresh, y = cpue_thresh, fill = F1)) +
   theme_bw()
 
 ```
+
+```{r Cross Vlaidation}
+library(dplyr)
+library(purrr)
+library(tidyr)
+library(rsample)
+set.seed(1)
+
+cpue_thr  <- 0.02                  # <-- set your management CPUE threshold
+perc_grid <- seq(0, 100, by = 1)
+cpue_levels <- c(0, 0.02, 0.04, 0.06, 0.08, 0.10)
+# simple stratified fold assignment
+dat_evt <- dat_evt %>%
+  mutate(actual = cpue >= cpue_thr)
+
+
+# repeated CV: tune these
+k <- 5
+R <- 200   # repeats (e.g., 100–500)
+
+folds <- vfold_cv(dat_evt, v = k, repeats = R, strata = actual)
+
+cv_long <- folds %>%
+  mutate(
+    assess = map(splits, assessment)
+  ) %>%
+  dplyr::select(id, id2, assess) %>%
+  tidyr::expand_grid(perc_thresh = perc_grid) %>%
+  mutate(
+    out = pmap(list(perc_thresh, assess),
+               \(p, d) metrics_for(p, cpue_thr, d)),
+    F1        = vapply(out, `[[`, numeric(1), "F1"),
+    Accuracy  = vapply(out, `[[`, numeric(1), "Accuracy"),
+    Precision = vapply(out, `[[`, numeric(1), "Precision"),
+    Recall    = vapply(out, `[[`, numeric(1), "Recall")
+  ) %>%
+  dplyr::select(-out, -assess)
+
+
+cv_sum <- cv_long %>%
+  group_by(perc_thresh) %>%
+  summarise(
+    F1_mean = mean(F1),
+    F1_sd   = sd(F1),
+    F1_se   = F1_sd / sqrt(n()),
+    .groups = "drop"
+  )
+
+best <- cv_sum %>% slice_max(F1_mean, n = 1, with_ties = FALSE)
+best
+
+target <- best$F1_mean - best$F1_se
+best_1se <- cv_sum %>%
+  filter(F1_mean >= target) %>%
+  slice_max(perc_thresh, n = 1, with_ties = FALSE)
+
+best_1se
+
+ggplot(cv_sum, aes(x = perc_thresh, y = F1_mean)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = F1_mean - F1_se, ymax = F1_mean + F1_se), alpha = 0.2) +
+  geom_vline(xintercept = best$perc_thresh, linetype = 2) +
+  geom_vline(xintercept = best_1se$perc_thresh, linetype = 3) +
+  labs(x = "eDNA % positive threshold", y = "CV mean F1 (±1 SE)",
+       title = sprintf("Repeated %d-fold CV (R=%d) tuning of %%pos threshold; CPUE≥%.3f", k, R, cpue_thr)) +
+  theme_bw()
+
+
+p_star <- best_1se$perc_thresh  # or best$perc_thresh
+
+
+oof <- folds %>%
+  mutate(
+    assess = map(splits, assessment),
+    oof_df = map(assess, ~ tibble(
+      pred = .x$perc_pos >= p_star,
+      act  = .x$cpue     >= cpue_thr
+    ))
+  ) %>%
+  dplyr::select(id, id2, oof_df) %>%
+  unnest(oof_df)
+
+# Confusion counts across all held-out predictions
+TP <- sum(oof$pred &  oof$act)
+FP <- sum(oof$pred & !oof$act)
+TN <- sum(!oof$pred & !oof$act)
+FN <- sum(!oof$pred &  oof$act)
+
+c(TP=TP, FP=FP, TN=TN, FN=FN)
+
+prec <- TP/(TP+FP+1e-9)
+rec  <- TP/(TP+FN+1e-9)
+f1   <- 2*prec*rec/(prec+rec+1e-9)
+acc  <- (TP+TN)/(TP+TN+FP+FN+1e-9)
+
+c(Accuracy=acc, Precision=prec, Recall=rec, F1=f1, perc_thresh=p_star)
+
+
+
+```
+
+```{r Plot CV confusion matrix}
+# thresholds
+perc_star <- p_star   # from your tuning
+cpue_thr  <- cpue_thr # fixed management threshold
+
+cm_full <- make_confusion(dat_evt, perc_star, cpue_thr)
+
+cm_full$metrics
+plot_confusion(cm_full,
+  title = sprintf("FULL data: perc_pos ≥ %.0f, CPUE ≥ %.3f", perc_star, cpue_thr)
+)
+
+
+
+```
+```{r Gneerate for multiple CPUEs}
+
+cpue_levels <- c(0.01, 0.02, 0.04, 0.06, 0.08, 0.10)
+
+run_cv_for_cpue <- function(dat_evt, cpue_thr, perc_grid, k = 5, R = 200) {
+
+  dat2 <- dat_evt %>%
+    mutate(actual = if (cpue_thr == 0) (cpue > 0) else (cpue >= cpue_thr))
+
+  # if only one class, stratification is impossible
+  strat_ok <- length(unique(dat2$actual)) > 1
+
+  folds <- if (strat_ok) {
+    vfold_cv(dat2, v = k, repeats = R, strata = actual)
+  } else {
+    vfold_cv(dat2, v = k, repeats = R)
+  }
+
+  # evaluate every threshold on every assessment set
+  cv_long <- folds %>%
+    mutate(assess = map(splits, assessment)) %>%
+    dplyr::select(id, id2, assess) %>%
+    tidyr::expand_grid(perc_thresh = perc_grid) %>%
+    mutate(
+      out = pmap(list(perc_thresh, assess),
+                 \(p, d) metrics_for(p, cpue_thr, d)),
+      F1        = vapply(out, `[[`, numeric(1), "F1"),
+      Accuracy  = vapply(out, `[[`, numeric(1), "Accuracy"),
+      Precision = vapply(out, `[[`, numeric(1), "Precision"),
+      Recall    = vapply(out, `[[`, numeric(1), "Recall")
+    ) %>%
+    dplyr::select(-out, -assess)
+
+  # tune threshold: maximise mean out-of-fold F1
+  cv_sum <- cv_long %>%
+    group_by(perc_thresh) %>%
+    summarise(
+      F1_mean = mean(F1),
+      F1_sd   = sd(F1),
+      F1_se   = F1_sd / sqrt(n()),
+      .groups = "drop"
+    )
+
+  best <- cv_sum %>% slice_max(F1_mean, n = 1, with_ties = FALSE)
+  p_star <- best$perc_thresh
+
+  # CV performance at tuned threshold (per split, then summarise)
+  perf_split <- folds %>%
+    mutate(
+      assess = map(splits, assessment),
+      m = map(assess, ~ {
+        out <- metrics_for(p_star, cpue_thr, .x)
+        tibble(F1 = out["F1"], Accuracy = out["Accuracy"],
+               Precision = out["Precision"], Recall = out["Recall"])
+      })
+    ) %>%
+    dplyr::select(m) %>%
+    unnest(m)
+
+  perf_sum <- perf_split %>%
+    summarise(
+      cpue_thr = cpue_thr,
+      perc_star = p_star,
+
+      F1_mean = mean(F1), F1_sd = sd(F1), F1_se = F1_sd / sqrt(n()),
+      Acc_mean = mean(Accuracy), Acc_sd = sd(Accuracy), Acc_se = Acc_sd / sqrt(n()),
+      Prec_mean = mean(Precision), Prec_sd = sd(Precision), Prec_se = Prec_sd / sqrt(n()),
+      Rec_mean = mean(Recall), Rec_sd = sd(Recall), Rec_se = Rec_sd / sqrt(n()),
+      .groups = "drop"
+    )
+
+  # confusion matrix on FULL dataset using tuned threshold
+  cm_full <- make_confusion(dat2 %>% dplyr::select(perc_pos, cpue), p_star, cpue_thr)
+
+  list(
+    cpue_thr = cpue_thr,
+    perc_star = p_star,
+    cv_sum = cv_sum,
+    perf_split = perf_split,
+    perf_sum = perf_sum,
+    cm_full = cm_full
+  )
+}
+
+results <- map(cpue_levels, ~ run_cv_for_cpue(dat_evt, .x, perc_grid, k = k, R = R))
+
+# Summarise performance across CPUE levels
+summary_table <- map_dfr(results, "perf_sum") %>%
+  mutate(
+    F1_mean_sd   = sprintf("%.3f ± %.3f", F1_mean, F1_sd),
+    Acc_mean_sd  = sprintf("%.3f ± %.3f", Acc_mean, Acc_sd),
+    Prec_mean_sd = sprintf("%.3f ± %.3f", Prec_mean, Prec_sd),
+    Rec_mean_sd  = sprintf("%.3f ± %.3f", Rec_mean, Rec_sd),
+
+    F1_mean_se   = sprintf("%.3f ± %.3f", F1_mean, F1_se),
+    Acc_mean_se  = sprintf("%.3f ± %.3f", Acc_mean, Acc_se),
+    Prec_mean_se = sprintf("%.3f ± %.3f", Prec_mean, Prec_se),
+    Rec_mean_se  = sprintf("%.3f ± %.3f", Rec_mean, Rec_se)
+  ) %>%
+  dplyr::select(cpue_thr, perc_star,
+         F1_mean_sd, Acc_mean_sd, Prec_mean_sd, Rec_mean_sd,
+         F1_mean_se, Acc_mean_se, Prec_mean_se, Rec_mean_se)
+
+summary_table
+
+
+```
+
+```{r Plot CMs}
+cm_all <- map_dfr(results, function(r) {
+  r$cm_full$cm %>%
+    mutate(
+      cpue_thr = r$cpue_thr,
+      perc_star = r$perc_star
+    )
+}) %>%
+  mutate(panel = paste0("CPUE ≥ ", cpue_thr, "\n%pos* = ", perc_star))
+
+ggplot(cm_all, aes(x = pred, y = actual, fill = n)) +
+  geom_tile(color = "grey30") +
+  geom_text(aes(label = label), size = 4) +
+  facet_wrap(~ panel, ncol = 3,
+             labeller = labeller(cpue_thr = function(x) paste0("CPUE ≥ ", x))) +
+  scale_fill_gradient(low = "white", high = "steelblue") +
+  labs(x = "Prediction from eDNA (% pos threshold tuned by CV)",
+       y = "Ground truth from CPUE",
+       fill = "Count",
+       title = "Confusion matrices using CV-tuned %pos thresholds") +
+  coord_fixed() +
+  theme_bw() +
+  theme(panel.grid = element_blank())
+
+library(viridis)
+
+ggplot(cm_all, aes(x = pred, y = actual, fill = row_prop)) +
+  geom_tile(color = "grey85", linewidth = 0.4) +
+  geom_text(aes(label = label), size = 4, color = "black") +
+  facet_wrap(~ panel, ncol = 3) +
+  scale_fill_viridis_c(option = "mako", direction = -1,begin=0.25, name = "Count") +
+  # scale_fill_viridis_c(option = "cividis", direction = -1,begin=0.2, name = "Count") +
+  labs(
+    x = "Prediction from eDNA (% pos)",
+    y = "Ground truth from CPUE",
+    title = "Confusion matrices with CV-tuned thresholds"
+  ) +
+  coord_fixed() +
+  theme_bw() +
+  theme(
+    panel.grid = element_blank()
+  )
+
+```
+
+```{r Model for Final CM}
+library(dplyr)
+
+dat <- reef_before %>%
+  transmute(
+    reef     = factor(Reef),
+    cpue     = cpue_reef,
+    counts   = total_cots,
+    effort   = total_bottom,
+    perc_pos = perc_pos_reef,
+    conc     = conc_mean_reef,
+    conc_t   = log1p(conc_mean_reef),
+    Collection.org = Collection.org# <-- transformation
+  ) %>%
+  filter(!is.na(cpue), !is.na(counts), !is.na(effort), effort > 0,
+         !is.na(perc_pos), !is.na(conc_t)) #%>%
+  #filter(Collection.org == "AIMS")
+library(glmmTMB)
+
+m_nb <- glmmTMB(
+  counts ~ perc_pos + conc_t + offset(log(effort)),
+  family = nbinom2(),
+  data = dat
+)
+summary(m_nb)
+
+m_nb_int <- glmmTMB(
+  counts ~ perc_pos * conc_t + offset(log(effort)),
+  family = nbinom2(),
+  data = dat
+)
+summary(m_nb_int)
+
+anova(m_nb,m_nb_int)
+```
+
+```{r CV model}
+library(dplyr)
+library(glmmTMB)
+library(rsample)
+library(purrr)
+library(tidyr)
+library(tibble)
+
+
+# model (interaction so conc helps separate high CPUE regimes)
+fit_nb <- function(df) {
+  glmmTMB(
+    counts ~ perc_pos * conc_t + offset(log(effort)),
+    family = nbinom2(),
+    data = df
+  )
+}
+
+metrics_from_score <- function(score, actual) {
+  TP <- sum(score &  actual)
+  FP <- sum(score & !actual)
+  TN <- sum(!score & !actual)
+  FN <- sum(!score &  actual)
+
+  prec <- TP/(TP+FP+1e-9)
+  rec  <- TP/(TP+FN+1e-9)
+  f1   <- 2*prec*rec/(prec+rec+1e-9)
+  acc  <- (TP+TN)/(TP+TN+FP+FN+1e-9)
+
+  c(F1=f1, Accuracy=acc, Precision=prec, Recall=rec)
+}
+
+tune_for_cpue <- function(dat, cpue_thr, k = 5, R = 200, n_grid = 200, seed = 1) {
+
+  set.seed(seed)
+
+  dat2 <- dat %>%
+    mutate(actual = cpue >= cpue_thr)
+
+  # stratify if possible
+  folds <- if (length(unique(dat2$actual)) > 1) {
+    vfold_cv(dat2, v = k, repeats = R, strata = actual)
+  } else {
+    vfold_cv(dat2, v = k, repeats = R)
+  }
+
+  # OOF predictions per split
+  oof <- folds %>%
+    mutate(
+      te = map(splits, assessment),
+      tr = map(splits, analysis),
+      fit = map(tr, fit_nb),
+      mu = map2(fit, te, ~ predict(.x, newdata = .y, type = "response")), # mean counts
+      score_cpue = map2(mu, te, ~ .x / .y$effort),                        # predicted CPUE score
+      oof_df = map2(te, score_cpue, ~ tibble(
+        cpue = .x$cpue,
+        actual = .x$cpue >= cpue_thr,
+        score_cpue = .y
+      ))
+    ) %>%
+    select(id, id2, oof_df) %>%
+    unnest(oof_df)
+
+  # Threshold grid on the score (predicted CPUE)
+  thr_grid <- quantile(oof$score_cpue, probs = seq(0, 1, length.out = n_grid), na.rm = TRUE)
+
+  # Evaluate each score threshold on all OOF rows (note: repeats replicate rows; OK for tuning)
+  grid <- tibble(score_thr = thr_grid) %>%
+    mutate(
+      out = map(score_thr, ~ {
+        pred <- oof$score_cpue >= .x
+        as.list(metrics_from_score(pred, oof$actual))
+      }),
+      F1 = map_dbl(out, "F1"),
+      Accuracy = map_dbl(out, "Accuracy"),
+      Precision = map_dbl(out, "Precision"),
+      Recall = map_dbl(out, "Recall")
+    ) %>%
+    select(-out)
+
+  best <- grid %>% slice_max(F1, n = 1, with_ties = FALSE)
+  s_star <- best$score_thr
+
+  # Split-wise metrics (best practice for mean±SD reporting)
+  split_metrics <- folds %>%
+    mutate(
+      te = map(splits, assessment),
+      fit = map(splits, ~ fit_nb(analysis(.x))),
+      score = map2(fit, te, ~ predict(.x, newdata = .y, type = "response") / .y$effort),
+      actual = map(te, ~ .x$cpue >= cpue_thr),
+      m = map2(score, actual, ~ {
+        pred <- .x >= s_star
+        out <- metrics_from_score(pred, .y)
+        tibble(F1=out["F1"], Accuracy=out["Accuracy"], Precision=out["Precision"], Recall=out["Recall"])
+      })
+    ) %>%
+    select(m) %>%
+    unnest(m)
+
+  perf <- split_metrics %>%
+    summarise(
+      cpue_thr = cpue_thr,
+      score_thr_star = s_star,
+      F1_mean = mean(F1), F1_sd = sd(F1), F1_se = F1_sd/sqrt(n()),
+      Acc_mean = mean(Accuracy), Acc_sd = sd(Accuracy), Acc_se = Acc_sd/sqrt(n()),
+      Prec_mean = mean(Precision), Prec_sd = sd(Precision), Prec_se = Prec_sd/sqrt(n()),
+      Rec_mean = mean(Recall), Rec_sd = sd(Recall), Rec_se = Rec_sd/sqrt(n()),
+      .groups = "drop"
+    )
+
+  list(perf = perf, score_thr = s_star)
+}
+
+boundary_curve <- function(fit_full, score_thr_star, perc_seq, effort_ref) {
+  b <- fixef(fit_full)$cond
+  b0 <- unname(b["(Intercept)"])
+  b1 <- unname(b["perc_pos"])
+  b2 <- unname(b["conc_t"])
+  b3 <- unname(b["perc_pos:conc_t"])
+
+  rhs <- log(score_thr_star * effort_ref) - log(effort_ref)  # offset cancels, but keep explicit
+  # Actually: eta = b0 + b1*p + b2*c + b3*p*c + log(effort_ref)
+  # score_thr_star = exp(eta)/effort_ref => log(score_thr_star) = b0 + b1*p + b2*c + b3*p*c
+  # so rhs = log(score_thr_star) - b0 - b1*p
+  # Solve: (b2 + b3*p) * c = log(score_thr_star) - b0 - b1*p
+
+  tibble(perc_pos = perc_seq) %>%
+    mutate(
+      denom = (b2 + b3 * perc_pos),
+      conc_t = (log(score_thr_star) - b0 - b1 * perc_pos) / denom,
+      conc_mean = pmax(expm1(conc_t), 0)
+    ) %>%
+    filter(is.finite(conc_mean), denom != 0)
+}
+
+cpue_levels <- c(0.01, 0.02, 0.04, 0.06, 0.08, 0.10)
+
+k <- 5
+R <- 200
+set.seed(1)
+
+# Tune score thresholds by repeated CV for each CPUE definition
+res <- map(cpue_levels, ~ tune_for_cpue(dat, .x, k = k, R = R, seed = 1))
+
+summary_table <- map_dfr(res, "perf") %>%
+  mutate(
+    F1_mean_sd   = sprintf("%.3f ± %.3f", F1_mean, F1_sd),
+    Acc_mean_sd  = sprintf("%.3f ± %.3f", Acc_mean, Acc_sd),
+    Prec_mean_sd = sprintf("%.3f ± %.3f", Prec_mean, Prec_sd),
+    Rec_mean_sd  = sprintf("%.3f ± %.3f", Rec_mean, Rec_sd),
+
+    F1_mean_se   = sprintf("%.3f ± %.3f", F1_mean, F1_se),
+    Acc_mean_se  = sprintf("%.3f ± %.3f", Acc_mean, Acc_se),
+    Prec_mean_se = sprintf("%.3f ± %.3f", Prec_mean, Prec_se),
+    Rec_mean_se  = sprintf("%.3f ± %.3f", Rec_mean, Rec_se)
+  ) %>%
+  select(cpue_thr, score_thr_star,
+         F1_mean_sd, Acc_mean_sd, Prec_mean_sd, Rec_mean_sd,
+         F1_mean_se, Acc_mean_se, Prec_mean_se, Rec_mean_se)
+
+summary_table
+
+fit_full <- fit_nb(dat)
+effort_ref <- median(dat$effort, na.rm = TRUE)
+perc_seq <- seq(min(dat$perc_pos), max(dat$perc_pos), length.out = 200)
+
+boundaries <- map2_dfr(cpue_levels, map_dbl(res, "score_thr"), ~ {
+  boundary_curve(fit_full, .y, perc_seq, effort_ref) %>%
+    mutate(cpue_thr = .x, score_thr = .y)
+})
+
+
+library(ggplot2)
+
+ggplot(boundaries, aes(x = perc_pos, y = conc_mean, colour = factor(cpue_thr))) +
+  geom_line(linewidth = 1) +
+  scale_y_continuous(trans = scales::pseudo_log_trans(sigma = 1)) +
+  labs(
+    x = "% eDNA positive (reef-level)",
+    y = "Mean concentration (threshold boundary)",
+    colour = "CPUE threshold",
+    title = "Model-derived decision boundaries (best combinations of %pos & conc)"
+  ) +
+  theme_bw()
+
+
+```
+
+## 2D Grid Search for AND  / OR combination rules CV
+```{r}
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(rsample)
+library(tibble)
+library(ggplot2)
+library(viridis)
+library(scales)
+
+dat_evt <- reef_before %>%
+  transmute(
+    reef      = factor(Reef),
+    cpue      = cpue_reef,
+    perc_pos  = perc_pos_reef,
+    conc_mean = conc_mean_reef,
+    conc_t    = log1p(conc_mean_reef),
+    Collection.org = Collection.org
+  ) %>%
+  # filter(Collection.org == "AIMS") %>%
+  drop_na() %>%
+  droplevels()
+
+# threshold grids
+perc_grid <- seq(0, 100, by = 1)
+
+# tune on transformed concentration; then convert back for reporting/ops
+conc_grid_t <- seq(min(dat_evt$conc_t, na.rm=TRUE),
+                   quantile(dat_evt$conc_t, 0.99, na.rm=TRUE),
+                   length.out = 60)
+
+cpue_levels <- c(0.01, 0.02, 0.04, 0.06, 0.08, 0.10)
+
+k <- 5
+R <- 200
+set.seed(1)
+
+rule <- "and"   # "and" is the rectangular rule; switch to "or" if you want
+
+# returns best (perc_star, conc_t_star) on TRAINING data (max F1); conservative tie-break = higher thresholds
+best_pair_train <- function(df, cpue_thr, perc_grid, conc_grid_t, rule = c("and","or")) {
+  rule <- match.arg(rule)
+  actual <- df$cpue >= cpue_thr
+
+  P <- length(perc_grid)
+  C <- length(conc_grid_t)
+
+  perc_ge <- outer(df$perc_pos, perc_grid, `>=`)   # n x P
+  conc_ge <- outer(df$conc_t,   conc_grid_t, `>=`) # n x C
+
+  f1_mat <- matrix(NA_real_, nrow = P, ncol = C)
+
+  for (pi in seq_len(P)) {
+    pred_mat <- if (rule == "and") conc_ge & perc_ge[, pi] else conc_ge | perc_ge[, pi]
+
+    TP <- colSums(pred_mat &  actual)
+    FP <- colSums(pred_mat & !actual)
+    FN <- colSums(!pred_mat &  actual)
+
+    prec <- TP / (TP + FP + 1e-9)
+    rec  <- TP / (TP + FN + 1e-9)
+    f1   <- 2 * prec * rec / (prec + rec + 1e-9)
+
+    f1_mat[pi, ] <- f1
+  }
+
+  max_f1 <- max(f1_mat, na.rm = TRUE)
+  idx <- which(f1_mat == max_f1, arr.ind = TRUE)
+
+  # tie-break: pick higher thresholds (more conservative)
+  idx <- idx[order(idx[,1], idx[,2], decreasing = TRUE), , drop = FALSE][1, ]
+
+  list(
+    perc_star   = perc_grid[idx[1]],
+    conc_t_star = conc_grid_t[idx[2]],
+    F1_train    = max_f1
+  )
+}
+
+metrics_pair <- function(df, cpue_thr, perc_star, conc_t_star, rule = c("and","or")) {
+  rule <- match.arg(rule)
+  actual <- df$cpue >= cpue_thr
+  pred <- if (rule == "and") {
+    (df$perc_pos >= perc_star) & (df$conc_t >= conc_t_star)
+  } else {
+    (df$perc_pos >= perc_star) | (df$conc_t >= conc_t_star)
+  }
+
+  TP <- sum(pred &  actual)
+  FP <- sum(pred & !actual)
+  TN <- sum(!pred & !actual)
+  FN <- sum(!pred &  actual)
+
+  prec <- TP/(TP+FP+1e-9)
+  rec  <- TP/(TP+FN+1e-9)
+  f1   <- 2*prec*rec/(prec+rec+1e-9)
+  acc  <- (TP+TN)/(TP+TN+FP+FN+1e-9)
+
+  tibble(F1=f1, Accuracy=acc, Precision=prec, Recall=rec)
+}
+
+
+run_cv_2d <- function(dat, cpue_thr, perc_grid, conc_grid_t, k=5, R=200, rule="and", seed=1) {
+  set.seed(seed)
+  dat2 <- dat %>% mutate(actual = cpue >= cpue_thr)
+
+  folds <- vfold_cv(dat2, v = k, repeats = R, strata = actual)
+
+  split_res <- map_dfr(folds$splits, function(spl) {
+    tr <- analysis(spl)
+    te <- assessment(spl)
+
+    best <- best_pair_train(tr, cpue_thr, perc_grid, conc_grid_t, rule = rule)
+    met  <- metrics_pair(te, cpue_thr, best$perc_star, best$conc_t_star, rule = rule)
+
+    tibble(
+      cpue_thr = cpue_thr,
+      perc_star = best$perc_star,
+      conc_t_star = best$conc_t_star,
+      conc_mean_star = pmax(expm1(best$conc_t_star), 0)
+    ) %>% bind_cols(met)
+  })
+
+  # choose operational thresholds as medians across resamples
+  thr <- split_res %>%
+    summarise(
+      perc_star = median(perc_star),
+      conc_t_star = median(conc_t_star),
+      conc_mean_star = median(conc_mean_star),
+      .groups = "drop"
+    )
+
+  # performance summary (mean ± SD and SE across resamples)
+  perf <- split_res %>%
+    summarise(
+      cpue_thr = cpue_thr,
+      perc_star = thr$perc_star,
+      conc_mean_star = thr$conc_mean_star,
+
+      F1_mean = mean(F1), F1_sd = sd(F1), F1_se = F1_sd/sqrt(n()),
+      Acc_mean = mean(Accuracy), Acc_sd = sd(Accuracy), Acc_se = Acc_sd/sqrt(n()),
+      Prec_mean = mean(Precision), Prec_sd = sd(Precision), Prec_se = Prec_sd/sqrt(n()),
+      Rec_mean = mean(Recall), Rec_sd = sd(Recall), Rec_se = Rec_sd/sqrt(n()),
+      .groups = "drop"
+    )
+
+  list(split_res = split_res, thr = thr, perf = perf)
+}
+
+```
+
+```{r Run CV 2D}
+results <- map(cpue_levels, ~ run_cv_2d(dat_evt, .x, perc_grid, conc_grid_t, k=k, R=R, rule=rule, seed=1))
+
+summary_table <- map_dfr(results, "perf") %>%
+  mutate(
+    F1_mean_sd   = sprintf("%.3f ± %.3f", F1_mean, F1_sd),
+    Acc_mean_sd  = sprintf("%.3f ± %.3f", Acc_mean, Acc_sd),
+    Prec_mean_sd = sprintf("%.3f ± %.3f", Prec_mean, Prec_sd),
+    Rec_mean_sd  = sprintf("%.3f ± %.3f", Rec_mean, Rec_sd),
+
+    F1_mean_se   = sprintf("%.3f ± %.3f", F1_mean, F1_se),
+    Acc_mean_se  = sprintf("%.3f ± %.3f", Acc_mean, Acc_se),
+    Prec_mean_se = sprintf("%.3f ± %.3f", Prec_mean, Prec_se),
+    Rec_mean_se  = sprintf("%.3f ± %.3f", Rec_mean, Rec_se)
+  ) %>%
+  select(cpue_thr, perc_star, conc_mean_star,
+         F1_mean_sd, Acc_mean_sd, Prec_mean_sd, Rec_mean_sd,
+         F1_mean_se, Acc_mean_se, Prec_mean_se, Rec_mean_se)
+
+summary_table
+
+make_confusion_2d <- function(dat, perc_star, conc_t_star, cpue_thr, rule = c("and","or")) {
+  rule <- match.arg(rule)
+
+  classified <- dat %>%
+    mutate(
+      pred = case_when(
+        rule == "and" ~ if_else(perc_pos >= perc_star & conc_t >= conc_t_star, "Pred +", "Pred -"),
+        TRUE          ~ if_else(perc_pos >= perc_star | conc_t >= conc_t_star, "Pred +", "Pred -")
+      ),
+      actual = if_else(cpue >= cpue_thr, "Actual +", "Actual -")
+    )
+
+  cm <- classified %>%
+    count(actual, pred, .drop = FALSE) %>%
+    complete(actual = c("Actual +","Actual -"),
+             pred   = c("Pred +","Pred -"),
+             fill   = list(n = 0)) %>%
+    group_by(actual) %>%
+    mutate(row_prop = n / sum(n)) %>%
+    ungroup() %>%
+    mutate(label = paste0(n, "\n", scales::percent(row_prop, accuracy = 0.1)))
+
+  TP <- cm$n[cm$actual=="Actual +" & cm$pred=="Pred +"]
+  FP <- cm$n[cm$actual=="Actual -" & cm$pred=="Pred +"]
+  TN <- cm$n[cm$actual=="Actual -" & cm$pred=="Pred -"]
+  FN <- cm$n[cm$actual=="Actual +" & cm$pred=="Pred -"]
+
+  prec <- TP/(TP+FP+1e-9)
+  rec  <- TP/(TP+FN+1e-9)
+  f1   <- 2*prec*rec/(prec+rec+1e-9)
+  acc  <- (TP+TN)/(TP+TN+FP+FN+1e-9)
+
+  list(
+    cm = cm,
+    metrics = tibble(cpue_thr=cpue_thr, perc_star=perc_star, conc_mean_star=pmax(expm1(conc_t_star),0),
+                     Accuracy=acc, Precision=prec, Recall=rec, F1=f1)
+  )
+}
+
+# pull tuned thresholds
+thr_df <- map_dfr(results, "thr") %>% mutate(cpue_thr = cpue_levels)
+
+cm_all <- pmap_dfr(list(thr_df$cpue_thr, thr_df$perc_star, thr_df$conc_t_star), function(cp, p, c) {
+  obj <- make_confusion_2d(dat_evt, perc_star = p, conc_t_star = c, cpue_thr = cp, rule = rule)
+  obj$cm %>%
+    mutate(panel = paste0("CPUE ≥ ", cp, "\n%pos*=", round(p,1), "  conc*≈", round(pmax(expm1(c),0),1)))
+})
+
+ggplot(cm_all, aes(pred, actual, fill = row_prop)) +
+  geom_tile(color = "grey85", linewidth = 0.4) +
+  geom_text(aes(label = label), size = 4, color = "black") +
+  facet_wrap(~ panel, ncol = 3) +
+  scale_fill_viridis_c(option = "mako", direction = -1, begin =0.25,limits = c(0,1),
+                       labels = scales::percent, name = "Row %") +
+  labs(
+    x = "Prediction (2D rule)",
+    y = "Ground truth (CPUE)",
+    title = sprintf("2D rectangular rule (%s): Pred+ if %%pos and conc exceed thresholds", toupper(rule))
+  ) +
+  coord_fixed() +
+  theme_bw() +
+  theme(panel.grid = element_blank())
+
+```
+
+
+
 
 ## Confusion matrix - conc mean
 
