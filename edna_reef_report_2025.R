@@ -25,6 +25,7 @@ library(fuzzyjoin)
 library(leaflet)
 library(htmlwidgets)
 library(scales)
+library(sf)
 
 # =============================================================================
 # 1.  Load raw data
@@ -187,14 +188,14 @@ edna_agg_classified <- edna_agg |>
         conc_t = log1p(conc_mean),
         cpue_category = case_when(
             perc_pos >= thr_08$perc_star & conc_t >= thr_08$conc_t_star ~ "> 0.08 CPUE",
-            perc_pos >= thr_04$perc_star & conc_t >= thr_04$conc_t_star ~ "0.04–0.08 CPUE",
-            perc_pos >= thr_01$perc_star & conc_t >= thr_01$conc_t_star ~ "0.01–0.04 CPUE",
+            perc_pos >= thr_04$perc_star & conc_t >= thr_04$conc_t_star ~ "0.04-0.08 CPUE",
+            perc_pos >= thr_01$perc_star & conc_t >= thr_01$conc_t_star ~ "0.01-0.04 CPUE",
             TRUE ~ "< 0.01 CPUE"
         ),
         cpue_category = factor(cpue_category,
             levels = c(
-                "< 0.01 CPUE", "0.01–0.04 CPUE",
-                "0.04–0.08 CPUE", "> 0.08 CPUE"
+                "< 0.01 CPUE", "0.01-0.04 CPUE",
+                "0.04-0.08 CPUE", "> 0.08 CPUE"
             )
         )
     )
@@ -236,6 +237,97 @@ edna_2025 <- edna_2025 |>
             function(x) if (length(x) == 0) NA_character_ else x[length(x)]
         )
     )
+
+# --- 6b. Process Manta Tow and Cull CPUE for tooltips -----------------------
+# Manta Tow Data
+manta_raw <- read.csv("data/COTS Program  Manta Tow Data-2026-02-04.csv", stringsAsFactors = FALSE) |>
+    mutate(
+        SurveyDate = as.Date(substr(SurveyTime, 1, 10)),
+        StartLatitude = as.numeric(StartLatitude),
+        EndLatitude = as.numeric(EndLatitude),
+        StartLongitude = as.numeric(StartLongitude),
+        EndLongitude = as.numeric(EndLongitude),
+        ScarsCount = case_when(
+            !is.na(as.numeric(ScarsCount)) ~ as.numeric(ScarsCount),
+            tolower(FeedingScarCountRangeCode) == "a" ~ 0,
+            tolower(FeedingScarCountRangeCode) == "p" ~ 4,
+            tolower(FeedingScarCountRangeCode) == "c" ~ 10,
+            TRUE ~ 0
+        ),
+        CrownOfThornsStarfishCount = as.numeric(CrownOfThornsStarfishCount)
+    )
+
+# Aggregated data since Jan 2025 for tooltips
+manta_agg <- manta_raw |>
+    filter(SurveyDate >= as.Date("2025-01-01")) |>
+    mutate(
+        scar_present = if_else(tolower(FeedingScarCountRangeCode) %in% c("p", "c") | ScarsCount > 0, 1, 0, missing = 0)
+    ) |>
+    group_by(ReefID = as.character(ReefLabel)) |>
+    summarise(
+        manta_mean_cots       = round(mean(CrownOfThornsStarfishCount, na.rm = TRUE), 2),
+        manta_n_tows          = n(),
+        manta_tows_with_scars = sum(scar_present, na.rm = TRUE),
+        .groups = "drop"
+    )
+
+# Recent voyage Manta tows (last 15 days) as spatial tracks per reef
+manta_recent <- manta_raw |>
+filter(SurveyDate >= as.Date("2025-01-01")) |>
+    filter(!is.na(StartLatitude), !is.na(EndLatitude), !is.na(StartLongitude), !is.na(EndLongitude)) |>
+    group_by(ReefID = as.character(ReefLabel)) |>
+    filter(SurveyDate >= (max(SurveyDate, na.rm = TRUE) - 15)) |>
+    ungroup()
+
+if (nrow(manta_recent) > 0) {
+    manta_tracks <- manta_recent |>
+        rowwise() |>
+        mutate(
+            geometry = sf::st_sfc(sf::st_linestring(matrix(c(StartLongitude, EndLongitude,
+                                                             StartLatitude, EndLatitude), ncol = 2)))
+        ) |>
+        ungroup() |>
+        sf::st_as_sf(crs = 4326)
+
+    manta_cots_pts <- manta_tracks |> filter(CrownOfThornsStarfishCount > 0)
+    if (nrow(manta_cots_pts) > 0) {
+        # Place marker at the centroid of the tow line
+        manta_cots_pts <- sf::st_centroid(manta_cots_pts)
+    }
+
+    # Colour palette for ScarsCount (Blue=Low, Red=High)
+    pal_manta_scars <- colorNumeric(palette = "RdYlBu", domain = manta_tracks$ScarsCount, reverse = TRUE)
+} else {
+    manta_tracks <- NULL
+    manta_cots_pts <- NULL
+}
+
+# Reef-wide CPUE from existing cull.dat
+reef_cull_cpue <- cull.dat |>
+    mutate(
+        ReefID = sapply(
+            str_extract_all(ReefName, "(?<=\\()[^)]+(?=\\))"),
+            function(x) if (length(x) == 0) NA_character_ else x[length(x)]
+        )
+    ) |>
+    filter(!is.na(ReefID)) |>
+    group_by(ReefID) |>
+    summarise(
+        cull_total_cots = sum(Cohort1 + Cohort2 + Cohort3 + Cohort4, na.rm = TRUE),
+        cull_total_mins = sum(Bottomtime, na.rm = TRUE),
+        .groups = "drop"
+    ) |>
+    mutate(cull_reef_cpue = round(cull_total_cots / cull_total_mins, 4)) |>
+    select(ReefID, cull_reef_cpue)
+
+# Join to target_list and edna_2025 so all mapped sets get them
+target_list <- target_list |>
+    left_join(manta_agg, by = "ReefID") |>
+    left_join(reef_cull_cpue, by = "ReefID")
+
+edna_2025 <- edna_2025 |>
+    left_join(manta_agg, by = "ReefID") |>
+    left_join(reef_cull_cpue, by = "ReefID")
 
 # --- 6b. Join eDNA 2025 to Target Reef List by ReefID -----------------------
 edna_target <- inner_join(edna_2025, target_list,
@@ -284,23 +376,43 @@ print(non_target_table, n = Inf)
 # =============================================================================
 
 # Colour palette for the 4 CPUE categories
-cpue_levels <- c("< 0.01 CPUE", "0.01–0.04 CPUE", "0.04–0.08 CPUE", "> 0.08 CPUE")
+cpue_levels <- c("< 0.01 CPUE", "0.01-0.04 CPUE", "0.04-0.08 CPUE", "> 0.08 CPUE")
 cpue_colours <- c("#3288BD", "#FEE08B", "#FC8D59", "#D53E4F") # blue→yellow→orange→red
 pal_cpue <- colorFactor(palette = cpue_colours, levels = cpue_levels, ordered = TRUE)
 
 # --- Helper: build popup HTML -------------------------------------------------
 make_popup <- function(reef, date_edna, perc_pos, conc_mean, n_samples,
-                       cpue_category, region = "", tumra = "") {
-    paste0(
+                       cpue_category, region = "", tumra = "",
+                       cull_cpue = NA, manta_mean = NA, manta_tows = NA, manta_scars = NA) {
+    pt <- paste0(
         "<b>", reef, "</b><br>",
         ifelse(!is.na(region) & region != "", paste0("Region: ", region, "<br>"), ""),
-        ifelse(!is.na(tumra) & tumra != "", paste0("TUMRA: ", tumra, "<br>"), ""),
-        "Survey date: ", format(date_edna, "%d %b %Y"), "<br>",
-        "% eDNA positive: ", round(perc_pos, 1), "%<br>",
-        "Mean concentration: ", round(conc_mean, 2), " copies/rxn<br>",
-        "Samples: ", n_samples, "<br>",
-        "<b>Expected CPUE: ", cpue_category, "</b>"
+        ifelse(!is.na(tumra) & tumra != "", paste0("TUMRA: ", tumra, "<br>"), "")
     )
+
+    if (is.na(date_edna)) {
+        pt <- paste0(pt, "<i>No eDNA data since Jan 2025</i><br>")
+    } else {
+        pt <- paste0(pt,
+            "Survey date: ", format(date_edna, "%d %b %Y"), "<br>",
+            "% eDNA positive: ", round(perc_pos, 1), "%<br>",
+            "Mean concentration: ", round(conc_mean, 2), " copies/rxn<br>",
+            "Samples: ", n_samples, "<br>",
+            "<b>Expected CPUE: ", cpue_category, "</b><br>"
+        )
+    }
+
+    if (!is.na(cull_cpue)) {
+        pt <- paste0(pt, "<br><b>Overall Cull CPUE: </b>", cull_cpue, " COTS/min")
+    }
+    if (!is.na(manta_mean)) {
+       pt <- paste0(pt, "<br><b>Manta Tow (since Jan 2025):</b><br>",
+                    "&nbsp;&nbsp;Mean COTS/tow: ", manta_mean, "<br>",
+                    "&nbsp;&nbsp;Tows: ", manta_tows, "<br>",
+                    "&nbsp;&nbsp;Tows w/ scars: ", manta_scars, "<br>")
+    }
+
+    return(pt)
 }
 
 # --- 8a. eDNA target reefs (have lat/lon from target list) -------------------
@@ -308,6 +420,7 @@ target_popups <- unname(with(
     edna_target,
     mapply(make_popup, ReefName, date_edna, perc_pos, conc_mean,
         n_samples, as.character(cpue_category), Management_Region, TUMRA,
+        cull_reef_cpue, manta_mean_cots, manta_n_tows, manta_tows_with_scars,
         SIMPLIFY = TRUE
     )
 ))
@@ -316,15 +429,15 @@ target_popups <- unname(with(
 # Filter to only rows with coordinates (must match what addCircleMarkers receives)
 target_no_edna_map <- target_no_edna |> filter(!is.na(Longitude))
 
-no_edna_popups <- with(
+no_edna_popups <- unname(with(
     target_no_edna_map,
-    paste0(
-        "<b>", ReefName, "</b><br>",
-        "Region: ", Management_Region, "<br>",
-        ifelse(!is.na(TUMRA) & TUMRA != "", paste0("TUMRA: ", TUMRA, "<br>"), ""),
-        "<i>No eDNA data since Jan 2025</i>"
+    mapply(make_popup,
+        reef = ReefName, date_edna = NA, perc_pos = NA, conc_mean = NA, n_samples = NA, cpue_category = NA,
+        region = Management_Region, tumra = TUMRA,
+        cull_cpue = cull_reef_cpue, manta_mean = manta_mean_cots, manta_tows = manta_n_tows, manta_scars = manta_tows_with_scars,
+        SIMPLIFY = TRUE
     )
-)
+))
 
 # --- 8c. Build map -----------------------------------------------------------
 # Build popup and data for non-target reefs (use eDNA-derived coords)
@@ -336,6 +449,7 @@ non_target_popups <- unname(with(
         n_samples, as.character(cpue_category),
         rep("", nrow(edna_not_target_map)),   # no region
         rep("", nrow(edna_not_target_map)),   # no TUMRA
+        cull_reef_cpue, manta_mean_cots, manta_n_tows, manta_tows_with_scars,
         SIMPLIFY = TRUE
     )
 ))
@@ -359,6 +473,67 @@ non_target_icons <- awesomeIcons(
     library     = "fa",
     markerColor = edna_not_target_map$marker_col
 )
+
+# --- 8d. Prepare KML Cull Sites layer ----------------------------------------
+cull_gpkg <- "data/Eotr_CotsCullSites_2025_11_19_1_58_PM.gpkg"
+if (file.exists(cull_gpkg)) {
+    cull_sites_sf <- sf::st_read(cull_gpkg, quiet = TRUE)
+} else {
+    # Extract the underlying doc.kml from the .kmz zip to avoid sf/GDAL driver issues
+    tmp_kml_dir <- tempfile("kmz_")
+    dir.create(tmp_kml_dir)
+    unzip("data/Eotr_CotsCullSites_2025_11_19_1_58_PM.kmz", exdir = tmp_kml_dir)
+    extracted_kml <- file.path(tmp_kml_dir, "doc.kml")
+
+    # Get all layers from the KML (each Reef is likely its own folder/layer)
+    kml_layers <- sf::st_layers(extracted_kml)$name
+    cull_sites_sf <- do.call(rbind, lapply(kml_layers, function(l) {
+        sf::st_read(extracted_kml, layer = l, quiet = TRUE)
+    })) |> sf::st_zm(drop = TRUE)
+
+    # Save to gpkg for next run
+    sf::st_write(cull_sites_sf, dsn = cull_gpkg, driver = "GPKG", append = FALSE, quiet = TRUE)
+}
+
+# The user noted we can join KMZ 'Name' directly to 'CullSiteName' in cull.dat
+cull_site_latest <- cull.dat |>
+    filter(!is.na(CullSiteName)) |>
+    group_by(CullSiteName) |>
+    arrange(desc(SurveyDate)) |>
+    slice(1) |>
+    ungroup() |>
+    mutate(
+        site_cots = Cohort1 + Cohort2 + Cohort3 + Cohort4,
+        site_cpue = round(site_cots / Bottomtime, 4),
+        cpue_category = case_when(
+            site_cpue >= 0.08 ~ "> 0.08 CPUE",
+            site_cpue >= 0.04 ~ "0.04-0.08 CPUE",
+            site_cpue >= 0.01 ~ "0.01-0.04 CPUE",
+            TRUE ~ "< 0.01 CPUE"
+        ),
+        cpue_category = factor(cpue_category, levels = cpue_levels)
+    )
+
+cull_sites_map <- cull_sites_sf |>
+    left_join(cull_site_latest, by = c("Name" = "CullSiteName")) |>
+    filter(!is.na(site_cpue))
+
+cull_site_popups <- paste0(
+    "<b>Cull Site: ", cull_sites_map$Name, "</b><br>",
+    "Latest CPUE: ", cull_sites_map$site_cpue, " COTS/min<br>",
+    "<b>Category: ", as.character(cull_sites_map$cpue_category), "</b>"
+)
+
+cull_sites_map <- cull_sites_map |>
+    mutate(
+        marker_col = case_when(
+            as.integer(cpue_category) == 1L ~ "blue",
+            as.integer(cpue_category) == 2L ~ "orange",
+            as.integer(cpue_category) == 3L ~ "red",
+            as.integer(cpue_category) == 4L ~ "darkred",
+            TRUE ~ "gray"
+        )
+    )
 
 map <- leaflet() |>
     addProviderTiles(
@@ -415,22 +590,69 @@ map <- leaflet() |>
         opacity  = 1
     ) |>
 
-    # Layer control
-    addLayersControl(
-        overlayGroups = c(
-            "Target reefs (eDNA surveyed Jan 2025+)",
-            "Target reefs (no eDNA since Jan 2025)",
-            "Non-target reefs (eDNA surveyed Jan 2025+)"
-        ),
-        options = layersControlOptions(collapsed = FALSE)
+    # Layer 4: COTS Cull Sites (KML) as Polygons
+    addPolygons(
+        data        = cull_sites_map,
+        color       = "#ffffff",                # Border color
+        weight      = 1.5,                      # Border thickness
+        fillColor   = ~marker_col,              # Polygon fill from mapped marker_col
+        fillOpacity = 0.7,
+        popup       = cull_site_popups,
+        group       = "COTS Cull Sites (Latest CPUE)"
     )
+
+if (exists("manta_tracks") && !is.null(manta_tracks) && nrow(manta_tracks) > 0) {
+    map <- map |> addPolylines(
+        data = manta_tracks,
+        color = ~pal_manta_scars(ScarsCount),
+        weight = 3,
+        opacity = 0.8,
+        popup = ~paste0(
+            "<b>Manta Tow</b><br>",
+            "Reef: ", ReefLabel, "<br>",
+            "Date: ", format(SurveyDate, "%d %b %Y"), "<br>",
+            "Scars: ", ScarsCount, "<br>",
+            "COTS: ", CrownOfThornsStarfishCount
+        ),
+        group = "Recent Manta Tracks (Scars)"
+    )
+}
+
+if (exists("manta_cots_pts") && !is.null(manta_cots_pts) && nrow(manta_cots_pts) > 0) {
+    map <- map |> addCircleMarkers(
+        data = manta_cots_pts,
+        radius = 5,
+        color = "black",
+        weight = 1,
+        fillColor = "red",
+        fillOpacity = 1,
+        popup = ~paste0("<b>COTS Detected!</b><br>Reef: ", ReefLabel, "<br>Count: ", CrownOfThornsStarfishCount),
+        group = "Recent Manta COTS (>0)"
+    )
+}
+
+# Layer control
+map <- map |> addLayersControl(
+    overlayGroups = c(
+        "Target reefs (eDNA surveyed Jan 2025+)",
+        "Target reefs (no eDNA since Jan 2025)",
+        "Non-target reefs (eDNA surveyed Jan 2025+)",
+        "COTS Cull Sites (Latest CPUE)",
+        "Recent Manta Tracks (Scars)",
+        "Recent Manta COTS (>0)"
+    ),
+    options = layersControlOptions(collapsed = FALSE)
+)
 
 # =============================================================================
 # 9.  Save map
 # =============================================================================
 
-saveWidget(map, file = "edna_reef_report_2025.html", selfcontained = FALSE)
-message("\n── Map saved to: edna_reef_report_2025.html ──")
+Sys.setenv(RSTUDIO_PANDOC = "C:/Users/smatthew/AppData/Local/pandoc-3.9")
+
+
+saveWidget(map, file = "edna_reef_report_2025.html", selfcontained = TRUE)
+message("\n── Map saved to: edna_reef_report_2025.html (self-contained) ──")
 
 # =============================================================================
 # 10. Summary counts
