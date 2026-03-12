@@ -1,0 +1,3 @@
+Cull cols: []
+
+eDNA cols: ['Date', 'Year', 'Reef', 'ReefName', 'Site_name', 'Site_No', 'Lat', 'Long', 'Voyage', 'Project', 'Collection organisation', 'Collection vessel', 'Reef_rep', 'Site_rep', 'PCR1_binary', 'PCR2_binary', 'LOD_sample_positive', 'PCR1_conc', 'PCR2_conc', 'Conc_mean']

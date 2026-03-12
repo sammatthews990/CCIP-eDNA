@@ -1,0 +1,11 @@
+=== Cull Data ===
+Sheets: ['Creative Commons Licence', 'README', 'Cull']
+  Sheet 'Creative Commons Licence' cols: []
+  Sheet 'README' cols: ['COTS Cull Data']
+  Sheet 'Cull' cols: ['CrownOfThornsStarfishCullDiveId', 'SurveyDate', 'VesselName_ID', 'VoyageTitle', 'VoyageStartDate', 'VoyageEndDate', 'ReefLabel', 'ReefName', 'CullSiteName', 'Latitude', 'Longitude', 'Depth', 'Bottomtime', 'Cohort1', 'Cohort2', 'Cohort3', 'Cohort4', 'Source', 'CullDiveTypeName']
+
+=== eDNA Data ===
+Sheets: ['eDNA_data_ALL', 'Spatial data for repository', 'eDNAVoyages']
+  Sheet 'eDNA_data_ALL' cols: ['Date', 'Year', 'Reef', 'ReefName', 'Site_name', 'Site_No', 'Lat', 'Long', 'Voyage', 'Project', 'Collection organisation', 'Collection vessel', 'Reef_rep', 'Site_rep', 'PCR1_binary', 'PCR2_binary', 'LOD_sample_positive', 'PCR1_conc', 'PCR2_conc', 'Conc_mean']
+  Sheet 'Spatial data for repository' cols: ['name', 'longitude', ' latitude']
+  Sheet 'eDNAVoyages' cols: ['Vessel', 'Voyage', 'Departure Date', 'Return Date']
