@@ -305,18 +305,26 @@ ggplot(dat_glmm, aes(x = perc_pos_reef, y = obs_cpue)) +
 # Set CPUE Management Threshold
 cpue_thresh <- 0.04
 
+# Baseline uses 6 Months max window; Aggregating strictly by Reef
 dat_evt <- dat_glmm %>%
-    rename(reef = Reef, counts = total_cots, cpue = obs_cpue, perc_pos = perc_pos_reef) %>%
-    dplyr::select(reef, Collection.org, perc_pos, cpue)
+    filter(horizon == "6 Months") %>%
+    group_by(Reef, Collection.org) %>%
+    summarise(
+        counts = sum(total_cots, na.rm = TRUE),
+        total_bottom = sum(total_bottom, na.rm = TRUE),
+        perc_pos = mean(perc_pos_reef, na.rm = TRUE),
+        conc_mean_reef = mean(conc_mean_reef, na.rm = TRUE),
+        .groups = "drop"
+    ) %>%
+    mutate(
+        reef = Reef,
+        cpue = counts / total_bottom,
+        conc_t = log1p(conc_mean_reef)
+    ) %>%
+    dplyr::select(reef, Collection.org, perc_pos, conc_t, conc_mean_reef, cpue)
 
 res_all <- make_confusion(dat_evt, perc_thresh = 48, cpue_thresh = cpue_thresh)
 plot_confusion(res_all, title = sprintf("Full Data Matrix (eDNA ≥ 48%%, CPUE ≥ %.3f)", cpue_thresh))
-# Ensure the evt data contains the required columns including conc_t
-dat_evt <- dat_glmm %>%
-    rename(reef = Reef, counts = total_cots, cpue = obs_cpue, perc_pos = perc_pos_reef) %>%
-    mutate(conc_t = log1p(conc_mean_reef)) %>%
-    dplyr::select(reef, Collection.org, perc_pos, conc_t, conc_mean_reef, cpue)
-
 # 1) Evaluate on a grid of %pos AND cpue thresholds (Heatmap)
 perc_grid <- seq(0, 100, by = 2)
 cpue_grid <- seq(0, quantile(dat_evt$cpue, 0.99, na.rm = TRUE), length.out = 40)
@@ -426,9 +434,19 @@ p_hm
 p_cm
 cpue_target <- 0.02
 
-# Ensure we retain horizon data during formatting
+# Ensure we aggregate strictly by Reef to prevent Site-level contamination
 dat_evt_hor <- dat_glmm %>%
-    rename(reef = Reef, counts = total_cots, cpue = obs_cpue, perc_pos = perc_pos_reef) %>%
+    group_by(Reef, Collection.org, horizon) %>%
+    summarise(
+        counts = sum(total_cots, na.rm = TRUE),
+        total_bottom = sum(total_bottom, na.rm = TRUE),
+        perc_pos = mean(perc_pos_reef, na.rm = TRUE),
+        .groups = "drop"
+    ) %>%
+    mutate(
+        reef = Reef,
+        cpue = counts / total_bottom
+    ) %>%
     dplyr::select(reef, Collection.org, perc_pos, cpue, horizon)
 
 run_cv_for_horizon <- function(dat_full, hor_val, cpue_thr, perc_grid, k = 5, R = 100) {
@@ -607,6 +625,140 @@ p_2dcm <- ggplot(cm_all_2d, aes(pred, actual, fill = row_prop)) +
 
 p_2dhm
 p_2dcm
+library(sf)
+
+# 1. Standardize eDNA sample cohorts by their physical 'Site' level rather than 'Reef' layer
+edna_site <- edna.dat %>%
+    filter(!is.na(Lat), !is.na(Long), !is.na(Year)) %>%
+    mutate(date_edna = as.Date(Date)) %>%
+    group_by(ReefName, Site_name, Year) %>%
+    summarise(
+        Lat = mean(Lat),
+        Long = mean(Long),
+        date_edna = min(date_edna),
+        conc_mean = mean(as.numeric(Conc_mean), na.rm = TRUE),
+        perc_pos = mean(LOD_sample_positive, na.rm = TRUE) * 100,
+        n_samples = n(),
+        .groups = "drop"
+    ) %>%
+    rename(Reef = ReefName)
+
+# 2. Tag Sampling Regimes based on local density
+# (avg_samples per site usually bounds around ~6 or ~12)
+regime_df <- edna_site %>%
+    group_by(Reef, Year) %>%
+    summarise(
+        avg_samples = mean(n_samples),
+        .groups = "drop"
+    ) %>%
+    mutate(
+        regime = case_when(
+            avg_samples >= 10 ~ "3x12 Density",
+            TRUE ~ "4x6 Density"
+        )
+    )
+
+edna_site <- edna_site %>% left_join(regime_df, by = c("Reef", "Year"))
+
+# 3. Project coordinate matrices into native EPSG:3112 (Lambert Conformal Conic for AUS)
+edna_sf <- st_as_sf(edna_site, coords = c("Long", "Lat"), crs = 4326) %>% st_transform(3112)
+cull_sf <- cull %>%
+    filter(!is.na(Longitude), !is.na(Latitude)) %>%
+    st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326) %>%
+    st_transform(3112)
+buffer_radii <- c(200, 500, 1000, 2000)
+spatial_results <- list()
+
+for (dist_m in buffer_radii) {
+    # Radial expansion around each eDNA point
+    edna_buf <- st_buffer(edna_sf, dist = dist_m)
+
+    # Isolate Cull coordinates bounding inside the circle
+    intersect_cull <- st_join(edna_buf, cull_sf, join = st_intersects) %>%
+        filter(!is.na(date_cull))
+
+    # Constrain to 6 month temporal overlaps
+    valid_encounters <- intersect_cull %>%
+        mutate(diff_days = as.numeric(date_cull - date_edna)) %>%
+        filter(diff_days >= 0 & diff_days <= 183)
+
+    # Collapse cull metadata back onto the respective eDNA Site ID
+    site_cpue <- valid_encounters %>%
+        st_drop_geometry() %>%
+        rename(any_of(c(Reef = "Reef.x", Year = "Year.x"))) %>%
+        group_by(Reef, Site_name, Year, regime, perc_pos) %>%
+        summarise(
+            counts = sum(Cohort1 + Cohort2 + Cohort3 + Cohort4, na.rm = TRUE),
+            total_bottom = sum(Bottomtime, na.rm = TRUE),
+            .groups = "drop"
+        ) %>%
+        mutate(
+            cpue = counts / total_bottom,
+            radius = paste0(dist_m, "m Radius")
+        )
+
+    spatial_results[[as.character(dist_m)]] <- site_cpue
+}
+
+df_spatial <- bind_rows(spatial_results) %>%
+    mutate(radius = factor(radius, levels = paste0(buffer_radii, "m Radius")))
+
+# Run CV Threshold tuning evaluating spatial density bounds 
+# We evaluate both 0.04 and 0.02 CPUE Targets, using unified global thresholds per radius.
+evaluate_unified_spatial <- function(df, cp) {
+    cms_all <- list()
+    for (r in levels(df$radius)) {
+        sub_df <- df %>% filter(radius == r)
+        if (nrow(sub_df) < 5) next
+        
+        # 1. Calculate Single Global Threshold for the combined Radius
+        out <- run_cv_for_cpue(sub_df, cp, perc_grid, k = 5, R = 50)
+        if (is.null(out)) next
+        
+        opt_thresh <- out$perc_star
+        
+        # 2. Apply that same unified threshold across both Regimes individually
+        for (reg in unique(sub_df$regime)) {
+            reg_df <- sub_df %>% filter(regime == reg)
+            if (nrow(reg_df) > 0) {
+                cm_reg <- make_confusion(reg_df, perc_thresh = opt_thresh, cpue_thresh = cp)
+                cm_reg$cm <- cm_reg$cm %>% mutate(radius = r, regime = reg, cpue_thr = cp, perc_star = opt_thresh)
+                cms_all[[paste0(r, "_", reg)]] <- cm_reg$cm
+            }
+        }
+    }
+    
+    if (length(cms_all) > 0) {
+        df_cm <- bind_rows(cms_all) %>%
+            mutate(panel = factor(paste0(regime, "\n", radius, "\nGlobal %pos* = ", perc_star)))
+            
+        p <- ggplot(df_cm, aes(x = pred, y = actual, fill = row_prop)) +
+            geom_tile(color = "grey85", linewidth = 0.4) +
+            geom_text(aes(label = label), size = 3, color = "black") +
+            facet_wrap(~panel, ncol = 4) +
+            scale_fill_viridis_c(option = "mako", direction = -1, begin = 0.25, limits = c(0, 1), name = "Row Rate") +
+            labs(
+                x = "Prediction from eDNA (% pos)",
+                y = "Ground truth from explicit Local Site CPUE",
+                title = sprintf("Site-Level Confusion Matrices (CPUE ≥ %.2f) with Unified Radial Thresholds", cp)
+            ) +
+            coord_fixed()
+        return(list(p = p, cm = df_cm))
+    }
+    return(NULL)
+}
+
+res_04 <- evaluate_unified_spatial(df_spatial, 0.04)
+if (!is.null(res_04)) {
+    p_spatial_04 <- res_04$p
+    print(p_spatial_04)
+}
+
+res_02 <- evaluate_unified_spatial(df_spatial, 0.02)
+if (!is.null(res_02)) {
+    p_spatial_02 <- res_02$p
+    print(p_spatial_02)
+}
 
 
 # Safely load ggplot and export defined variables
@@ -617,3 +769,5 @@ if(exists("p_cm")) ggsave("plots/multi_horizon_CPUE.png", plot = p_cm, width=10,
 if(exists("p_cm_hor")) ggsave("plots/cv_horizons_02_CPUE.png", plot = p_cm_hor, width=10, height=4, dpi=300)
 if(exists("p_2dhm")) ggsave("plots/2D_AND_F1_Heatmap.png", plot = p_2dhm, width=10, height=8, dpi=300)
 if(exists("p_2dcm")) ggsave("plots/2D_AND_Multi_CM.png", plot = p_2dcm, width=10, height=8, dpi=300)
+if(exists("p_spatial_04")) ggsave("plots/spatial_buffer_CM_04.png", plot = p_spatial_04, width=12, height=8, dpi=300)
+if(exists("p_spatial_02")) ggsave("plots/spatial_buffer_CM_02.png", plot = p_spatial_02, width=12, height=8, dpi=300)

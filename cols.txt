@@ -1,3 +1,40 @@
-Cull cols: []
-
-eDNA cols: ['Date', 'Year', 'Reef', 'ReefName', 'Site_name', 'Site_No', 'Lat', 'Long', 'Voyage', 'Project', 'Collection organisation', 'Collection vessel', 'Reef_rep', 'Site_rep', 'PCR1_binary', 'PCR2_binary', 'LOD_sample_positive', 'PCR1_conc', 'PCR2_conc', 'Conc_mean']
+{
+  "cull_spatial_cols": [],
+  "edna_spatial_cols": [
+    "Reef",
+    "ReefName",
+    "Site_name",
+    "Site_No",
+    "Lat",
+    "Long",
+    "Reef_rep",
+    "Site_rep"
+  ],
+  "cull_all_cols": [
+    "Unnamed: 0",
+    "Unnamed: 1",
+    "Unnamed: 2"
+  ],
+  "edna_all_cols": [
+    "Date",
+    "Year",
+    "Reef",
+    "ReefName",
+    "Site_name",
+    "Site_No",
+    "Lat",
+    "Long",
+    "Voyage",
+    "Project",
+    "Collection organisation",
+    "Collection vessel",
+    "Reef_rep",
+    "Site_rep",
+    "PCR1_binary",
+    "PCR2_binary",
+    "LOD_sample_positive",
+    "PCR1_conc",
+    "PCR2_conc",
+    "Conc_mean"
+  ]
+}

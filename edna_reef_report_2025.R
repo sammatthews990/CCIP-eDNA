@@ -212,6 +212,64 @@ message(sprintf(
     nrow(edna_2025), length(unique(edna_2025$Reef))
 ))
 
+# --- 5b. Create site-level eDNA data for map markers (grouped by precise survey Lat/Long) ---
+edna_sites_2025 <- edna.dat |>
+    filter(!is.na(Year)) |>
+    rename(Collection.organisation = `Collection organisation`) |>
+    mutate(
+        Reef           = ReefName,
+        Collection.org = if_else(Collection.organisation == "AIMS", "AIMS", "Other"),
+        date_edna      = as.Date(Date),
+        Conc_mean      = as.numeric(Conc_mean),
+        Lat            = as.numeric(Lat),
+        Long           = as.numeric(Long)
+    ) |>
+    filter(date_edna >= as.Date("2025-01-01")) |>
+    filter(!is.na(Lat) & !is.na(Long)) |>
+    group_by(Reef, Lat, Long) |>
+    summarise(
+        date_edna  = min(date_edna),
+        conc_mean  = mean(Conc_mean, na.rm = TRUE),
+        perc_pos   = mean(LOD_sample_positive, na.rm = TRUE) * 100,
+        n_samples  = n(),
+        .groups    = "drop"
+    ) |>
+    mutate(
+        conc_t = log1p(conc_mean),
+        cpue_category = case_when(
+            perc_pos >= thr_08$perc_star & conc_t >= thr_08$conc_t_star ~ "> 0.08 CPUE",
+            perc_pos >= thr_04$perc_star & conc_t >= thr_04$conc_t_star ~ "0.04-0.08 CPUE",
+            perc_pos >= thr_01$perc_star & conc_t >= thr_01$conc_t_star ~ "0.01-0.04 CPUE",
+            TRUE ~ "< 0.01 CPUE"
+        ),
+        cpue_category = factor(cpue_category, levels = cpue_levels)
+    ) |>
+    mutate(
+        marker_col = case_when(
+            as.integer(cpue_category) == 1L ~ "blue",
+            as.integer(cpue_category) == 2L ~ "orange",
+            as.integer(cpue_category) == 3L ~ "red",
+            as.integer(cpue_category) == 4L ~ "darkred",
+            TRUE ~ "gray"
+        )
+    )
+
+site_icons <- awesomeIcons(
+    icon        = "flask",
+    iconColor   = "white",
+    library     = "fa",
+    markerColor = edna_sites_2025$marker_col
+)
+
+site_popups <- paste0(
+    "<b>eDNA Site (", edna_sites_2025$Reef, ")</b><br>",
+    "Survey Date: ", format(edna_sites_2025$date_edna, "%d %b %Y"), "<br>",
+    "<b>% Positive: ", round(edna_sites_2025$perc_pos, 1), "%</b><br>",
+    "<b>Mean Conc: ", round(edna_sites_2025$conc_mean, 2), " copies/rxn</b><br>",
+    "Samples: ", edna_sites_2025$n_samples, "<br>",
+    "<b>Expected CPUE: ", as.character(edna_sites_2025$cpue_category), "</b>"
+)
+
 # =============================================================================
 # 6.  Load Target Reef List and extract coordinates
 # =============================================================================
@@ -296,7 +354,7 @@ if (nrow(manta_recent) > 0) {
     }
 
     # Colour palette for ScarsCount (Blue=Low, Red=High)
-    pal_manta_scars <- colorNumeric(palette = "RdYlBu", domain = manta_tracks$ScarsCount, reverse = TRUE)
+    pal_manta_scars <- colorNumeric(palette = "RdYlBu", domain = 0:10, reverse = TRUE)
 } else {
     manta_tracks <- NULL
     manta_cots_pts <- NULL
@@ -498,6 +556,7 @@ if (file.exists(cull_gpkg)) {
 # The user noted we can join KMZ 'Name' directly to 'CullSiteName' in cull.dat
 cull_site_latest <- cull.dat |>
     filter(!is.na(CullSiteName)) |>
+    filter(SurveyDate >= as.Date("2025-01-01")) |>
     group_by(CullSiteName) |>
     arrange(desc(SurveyDate)) |>
     slice(1) |>
@@ -599,6 +658,16 @@ map <- leaflet() |>
         fillOpacity = 0.7,
         popup       = cull_site_popups,
         group       = "COTS Cull Sites (Latest CPUE)"
+    ) |>
+
+    # Layer 5: Individual eDNA Sample Sites (Awesome Markers)
+    addAwesomeMarkers(
+        data   = edna_sites_2025,
+        lng    = ~Long,
+        lat    = ~Lat,
+        icon   = site_icons,
+        popup  = site_popups,
+        group  = "eDNA Sample Sites (Jan 2025+)"
     )
 
 if (exists("manta_tracks") && !is.null(manta_tracks) && nrow(manta_tracks) > 0) {
@@ -637,6 +706,7 @@ map <- map |> addLayersControl(
         "Target reefs (eDNA surveyed Jan 2025+)",
         "Target reefs (no eDNA since Jan 2025)",
         "Non-target reefs (eDNA surveyed Jan 2025+)",
+        "eDNA Sample Sites (Jan 2025+)",
         "COTS Cull Sites (Latest CPUE)",
         "Recent Manta Tracks (Scars)",
         "Recent Manta COTS (>0)"
