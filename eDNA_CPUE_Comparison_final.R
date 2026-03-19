@@ -729,13 +729,23 @@ evaluate_unified_spatial <- function(df, cp) {
     }
     
     if (length(cms_all) > 0) {
-        df_cm <- bind_rows(cms_all) %>%
-            mutate(panel = factor(paste0(regime, "\n", radius, "\nGlobal %pos* = ", perc_star)))
+        df_cm <- bind_rows(cms_all)
+        
+        # Explicitly order the column labels by Radius numerically
+        lbl_order <- df_cm %>% 
+            dplyr::select(radius, perc_star) %>% 
+            distinct() %>% 
+            arrange(radius) %>%
+            mutate(lbl = paste0(radius, "\nGlobal %pos* = ", perc_star)) %>%
+            pull(lbl)
+            
+        df_cm <- df_cm %>%
+            mutate(radius_lbl = factor(paste0(radius, "\nGlobal %pos* = ", perc_star), levels = lbl_order))
             
         p <- ggplot(df_cm, aes(x = pred, y = actual, fill = row_prop)) +
             geom_tile(color = "grey85", linewidth = 0.4) +
             geom_text(aes(label = label), size = 3, color = "black") +
-            facet_wrap(~panel, ncol = 4) +
+            facet_grid(regime ~ radius_lbl) +
             scale_fill_viridis_c(option = "mako", direction = -1, begin = 0.25, limits = c(0, 1), name = "Row Rate") +
             labs(
                 x = "Prediction from eDNA (% pos)",
@@ -759,6 +769,38 @@ if (!is.null(res_02)) {
     p_spatial_02 <- res_02$p
     print(p_spatial_02)
 }
+metrics_list <- list()
+if (exists("res_04") && !is.null(res_04)) metrics_list[["0.04"]] <- res_04$cm
+if (exists("res_02") && !is.null(res_02)) metrics_list[["0.02"]] <- res_02$cm
+
+if (length(metrics_list) > 0) {
+    df_metrics <- bind_rows(metrics_list, .id = "CPUE") %>%
+        mutate(class = case_when(
+            pred == "Pred +" & actual == "Actual +" ~ "TP",
+            pred == "Pred +" & actual == "Actual -" ~ "FP",
+            pred == "Pred -" & actual == "Actual +" ~ "FN",
+            pred == "Pred -" & actual == "Actual -" ~ "TN"
+        )) %>%
+        dplyr::select(CPUE, radius, regime, perc_star, class, n) %>%
+        pivot_wider(names_from = class, values_from = n, values_fill = list(n = 0)) %>%
+        mutate(
+            TPR = TP / (TP + FN + 1e-9),
+            Sensitivity = TPR,
+            FPR = FP / (FP + TN + 1e-9),
+            Precision = TP / (TP + FP + 1e-9),
+            F1 = 2 * (Precision * TPR) / (Precision + TPR + 1e-9)
+        ) %>%
+        arrange(CPUE, radius, regime) %>%
+        dplyr::select(
+            CPUE, Radius = radius, Regime = regime, `% Pos Target` = perc_star, 
+            TPR, FPR, Sensitivity, Precision, F1
+        )
+        
+    # Expose the formatted statistics natively inside the rendered workflow
+    df_metrics %>%
+        mutate(across(c(TPR, FPR, Sensitivity, Precision, F1), ~ round(.x, 3))) %>%
+        knitr::kable(caption = "Site-Level Performance Statistics bounded by Spatial Extents & Regimes")
+}
 
 
 # Safely load ggplot and export defined variables
@@ -771,3 +813,4 @@ if(exists("p_2dhm")) ggsave("plots/2D_AND_F1_Heatmap.png", plot = p_2dhm, width=
 if(exists("p_2dcm")) ggsave("plots/2D_AND_Multi_CM.png", plot = p_2dcm, width=10, height=8, dpi=300)
 if(exists("p_spatial_04")) ggsave("plots/spatial_buffer_CM_04.png", plot = p_spatial_04, width=12, height=8, dpi=300)
 if(exists("p_spatial_02")) ggsave("plots/spatial_buffer_CM_02.png", plot = p_spatial_02, width=12, height=8, dpi=300)
+if(exists("df_metrics")) write.csv(df_metrics, "plots/spatial_metrics.csv", row.names=FALSE)

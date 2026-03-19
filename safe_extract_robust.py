@@ -28,6 +28,7 @@ def extract():
     code += 'if(exists("p_2dcm")) ggsave("plots/2D_AND_Multi_CM.png", plot = p_2dcm, width=10, height=8, dpi=300)\n'
     code += 'if(exists("p_spatial_04")) ggsave("plots/spatial_buffer_CM_04.png", plot = p_spatial_04, width=12, height=8, dpi=300)\n'
     code += 'if(exists("p_spatial_02")) ggsave("plots/spatial_buffer_CM_02.png", plot = p_spatial_02, width=12, height=8, dpi=300)\n'
+    code += 'if(exists("df_metrics")) write.csv(df_metrics, "plots/spatial_metrics.csv", row.names=FALSE)\n'
 
     with codecs.open("eDNA_CPUE_Comparison_final.R", 'w', 'utf-8') as f:
         f.write(code)

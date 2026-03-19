@@ -103,7 +103,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#horizon-specific-thresholding-cpue-0.02" id="toc-horizon-specific-thresholding-cpue-0.02" class="nav-link" data-scroll-target="#horizon-specific-thresholding-cpue-0.02">8.1 Horizon-Specific Thresholding (CPUE ≥ 0.02)</a></li>
   </ul></li>
   <li><a href="#multivariate-rule-search" id="toc-multivariate-rule-search" class="nav-link" data-scroll-target="#multivariate-rule-search">9. Multivariate Rule Search</a></li>
-  <li><a href="#site-level-spatial-buffer-analysis" id="toc-site-level-spatial-buffer-analysis" class="nav-link" data-scroll-target="#site-level-spatial-buffer-analysis">10. Site-Level Spatial Buffer Analysis</a></li>
+  <li><a href="#site-level-spatial-buffer-analysis" id="toc-site-level-spatial-buffer-analysis" class="nav-link" data-scroll-target="#site-level-spatial-buffer-analysis">10. Site-Level Spatial Buffer Analysis</a>
+  <ul class="collapse">
+  <li><a href="#interpretation-of-spatial-validation-metrics" id="toc-interpretation-of-spatial-validation-metrics" class="nav-link" data-scroll-target="#interpretation-of-spatial-validation-metrics">Interpretation of Spatial Validation Metrics</a></li>
+  </ul></li>
   </ul>
 </nav>
 </div>
@@ -1077,48 +1080,66 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
 <span id="cb24-35"><a href="#cb24-35" aria-hidden="true" tabindex="-1"></a>df_spatial <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(spatial_results) <span class="sc">%&gt;%</span></span>
 <span id="cb24-36"><a href="#cb24-36" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">radius =</span> <span class="fu">factor</span>(radius, <span class="at">levels =</span> <span class="fu">paste0</span>(buffer_radii, <span class="st">"m Radius"</span>)))</span>
 <span id="cb24-37"><a href="#cb24-37" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-38"><a href="#cb24-38" aria-hidden="true" tabindex="-1"></a><span class="co"># Run CV Threshold tuning evaluating spatial density bounds (Evaluate 0.04 CPUE Target)</span></span>
-<span id="cb24-39"><a href="#cb24-39" aria-hidden="true" tabindex="-1"></a>run_spatial_cv <span class="ot">&lt;-</span> <span class="cf">function</span>(dat_sub, cpue_val, r_label, reg_label) {</span>
-<span id="cb24-40"><a href="#cb24-40" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (<span class="fu">nrow</span>(dat_sub) <span class="sc">&lt;</span> <span class="dv">5</span>) {</span>
-<span id="cb24-41"><a href="#cb24-41" aria-hidden="true" tabindex="-1"></a>        <span class="fu">return</span>(<span class="cn">NULL</span>)</span>
-<span id="cb24-42"><a href="#cb24-42" aria-hidden="true" tabindex="-1"></a>    } <span class="co"># Skip if empty constraints</span></span>
-<span id="cb24-43"><a href="#cb24-43" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-44"><a href="#cb24-44" aria-hidden="true" tabindex="-1"></a>    res <span class="ot">&lt;-</span> <span class="fu">run_cv_for_cpue</span>(dat_sub, cpue_val, perc_grid, <span class="at">k =</span> <span class="dv">5</span>, <span class="at">R =</span> <span class="dv">50</span>)</span>
-<span id="cb24-45"><a href="#cb24-45" aria-hidden="true" tabindex="-1"></a>    res<span class="sc">$</span>cm_full<span class="sc">$</span>cm <span class="ot">&lt;-</span> res<span class="sc">$</span>cm_full<span class="sc">$</span>cm <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">radius =</span> r_label, <span class="at">regime =</span> reg_label)</span>
-<span id="cb24-46"><a href="#cb24-46" aria-hidden="true" tabindex="-1"></a>    res</span>
-<span id="cb24-47"><a href="#cb24-47" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb24-48"><a href="#cb24-48" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-49"><a href="#cb24-49" aria-hidden="true" tabindex="-1"></a>spatial_cms <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
-<span id="cb24-50"><a href="#cb24-50" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (r <span class="cf">in</span> <span class="fu">levels</span>(df_spatial<span class="sc">$</span>radius)) {</span>
-<span id="cb24-51"><a href="#cb24-51" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> (reg <span class="cf">in</span> <span class="fu">unique</span>(df_spatial<span class="sc">$</span>regime)) {</span>
-<span id="cb24-52"><a href="#cb24-52" aria-hidden="true" tabindex="-1"></a>        sub_df <span class="ot">&lt;-</span> df_spatial <span class="sc">%&gt;%</span> <span class="fu">filter</span>(radius <span class="sc">==</span> r, regime <span class="sc">==</span> reg)</span>
-<span id="cb24-53"><a href="#cb24-53" aria-hidden="true" tabindex="-1"></a>        out <span class="ot">&lt;-</span> <span class="fu">run_spatial_cv</span>(sub_df, <span class="fl">0.04</span>, r, reg)</span>
-<span id="cb24-54"><a href="#cb24-54" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> (<span class="sc">!</span><span class="fu">is.null</span>(out)) {</span>
-<span id="cb24-55"><a href="#cb24-55" aria-hidden="true" tabindex="-1"></a>            spatial_cms[[<span class="fu">paste0</span>(r, <span class="st">"_"</span>, reg)]] <span class="ot">&lt;-</span> out<span class="sc">$</span>cm_full<span class="sc">$</span>cm <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">cpue_thr =</span> <span class="fl">0.04</span>, <span class="at">perc_star =</span> out<span class="sc">$</span>perc_star)</span>
-<span id="cb24-56"><a href="#cb24-56" aria-hidden="true" tabindex="-1"></a>        }</span>
-<span id="cb24-57"><a href="#cb24-57" aria-hidden="true" tabindex="-1"></a>    }</span>
-<span id="cb24-58"><a href="#cb24-58" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb24-59"><a href="#cb24-59" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-60"><a href="#cb24-60" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="fu">length</span>(spatial_cms) <span class="sc">&gt;</span> <span class="dv">0</span>) {</span>
-<span id="cb24-61"><a href="#cb24-61" aria-hidden="true" tabindex="-1"></a>    df_spatial_cm <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(spatial_cms) <span class="sc">%&gt;%</span></span>
-<span id="cb24-62"><a href="#cb24-62" aria-hidden="true" tabindex="-1"></a>        <span class="fu">mutate</span>(</span>
-<span id="cb24-63"><a href="#cb24-63" aria-hidden="true" tabindex="-1"></a>            <span class="at">panel =</span> <span class="fu">paste0</span>(regime, <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>, radius, <span class="st">"</span><span class="sc">\n</span><span class="st">%pos* = "</span>, perc_star)</span>
-<span id="cb24-64"><a href="#cb24-64" aria-hidden="true" tabindex="-1"></a>        )</span>
-<span id="cb24-65"><a href="#cb24-65" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-66"><a href="#cb24-66" aria-hidden="true" tabindex="-1"></a>    p_spatial <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(df_spatial_cm, <span class="fu">aes</span>(<span class="at">x =</span> pred, <span class="at">y =</span> actual, <span class="at">fill =</span> row_prop)) <span class="sc">+</span></span>
-<span id="cb24-67"><a href="#cb24-67" aria-hidden="true" tabindex="-1"></a>        <span class="fu">geom_tile</span>(<span class="at">color =</span> <span class="st">"grey85"</span>, <span class="at">linewidth =</span> <span class="fl">0.4</span>) <span class="sc">+</span></span>
-<span id="cb24-68"><a href="#cb24-68" aria-hidden="true" tabindex="-1"></a>        <span class="fu">geom_text</span>(<span class="fu">aes</span>(<span class="at">label =</span> label), <span class="at">size =</span> <span class="dv">3</span>, <span class="at">color =</span> <span class="st">"black"</span>) <span class="sc">+</span></span>
-<span id="cb24-69"><a href="#cb24-69" aria-hidden="true" tabindex="-1"></a>        <span class="fu">facet_wrap</span>(<span class="sc">~</span>panel, <span class="at">ncol =</span> <span class="dv">4</span>) <span class="sc">+</span></span>
-<span id="cb24-70"><a href="#cb24-70" aria-hidden="true" tabindex="-1"></a>        <span class="fu">scale_fill_viridis_c</span>(<span class="at">option =</span> <span class="st">"mako"</span>, <span class="at">direction =</span> <span class="sc">-</span><span class="dv">1</span>, <span class="at">begin =</span> <span class="fl">0.25</span>, <span class="at">limits =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>), <span class="at">name =</span> <span class="st">"Row Rate"</span>) <span class="sc">+</span></span>
-<span id="cb24-71"><a href="#cb24-71" aria-hidden="true" tabindex="-1"></a>        <span class="fu">labs</span>(</span>
-<span id="cb24-72"><a href="#cb24-72" aria-hidden="true" tabindex="-1"></a>            <span class="at">x =</span> <span class="st">"Prediction from eDNA (% pos)"</span>,</span>
-<span id="cb24-73"><a href="#cb24-73" aria-hidden="true" tabindex="-1"></a>            <span class="at">y =</span> <span class="st">"Ground truth from explicit Local Site CPUE"</span>,</span>
-<span id="cb24-74"><a href="#cb24-74" aria-hidden="true" tabindex="-1"></a>            <span class="at">title =</span> <span class="st">"Site-Level Confusion Matrices across Radial Buffers and Sampling Regimes (CPUE ≥ 0.04)"</span></span>
-<span id="cb24-75"><a href="#cb24-75" aria-hidden="true" tabindex="-1"></a>        ) <span class="sc">+</span></span>
-<span id="cb24-76"><a href="#cb24-76" aria-hidden="true" tabindex="-1"></a>        <span class="fu">coord_fixed</span>()</span>
-<span id="cb24-77"><a href="#cb24-77" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-78"><a href="#cb24-78" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span>(p_spatial)</span>
-<span id="cb24-79"><a href="#cb24-79" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb24-38"><a href="#cb24-38" aria-hidden="true" tabindex="-1"></a><span class="co"># Run CV Threshold tuning evaluating spatial density bounds </span></span>
+<span id="cb24-39"><a href="#cb24-39" aria-hidden="true" tabindex="-1"></a><span class="co"># We evaluate both 0.04 and 0.02 CPUE Targets, using unified global thresholds per radius.</span></span>
+<span id="cb24-40"><a href="#cb24-40" aria-hidden="true" tabindex="-1"></a>evaluate_unified_spatial <span class="ot">&lt;-</span> <span class="cf">function</span>(df, cp) {</span>
+<span id="cb24-41"><a href="#cb24-41" aria-hidden="true" tabindex="-1"></a>    cms_all <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb24-42"><a href="#cb24-42" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> (r <span class="cf">in</span> <span class="fu">levels</span>(df<span class="sc">$</span>radius)) {</span>
+<span id="cb24-43"><a href="#cb24-43" aria-hidden="true" tabindex="-1"></a>        sub_df <span class="ot">&lt;-</span> df <span class="sc">%&gt;%</span> <span class="fu">filter</span>(radius <span class="sc">==</span> r)</span>
+<span id="cb24-44"><a href="#cb24-44" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> (<span class="fu">nrow</span>(sub_df) <span class="sc">&lt;</span> <span class="dv">5</span>) <span class="cf">next</span></span>
+<span id="cb24-45"><a href="#cb24-45" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb24-46"><a href="#cb24-46" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 1. Calculate Single Global Threshold for the combined Radius</span></span>
+<span id="cb24-47"><a href="#cb24-47" aria-hidden="true" tabindex="-1"></a>        out <span class="ot">&lt;-</span> <span class="fu">run_cv_for_cpue</span>(sub_df, cp, perc_grid, <span class="at">k =</span> <span class="dv">5</span>, <span class="at">R =</span> <span class="dv">50</span>)</span>
+<span id="cb24-48"><a href="#cb24-48" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> (<span class="fu">is.null</span>(out)) <span class="cf">next</span></span>
+<span id="cb24-49"><a href="#cb24-49" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb24-50"><a href="#cb24-50" aria-hidden="true" tabindex="-1"></a>        opt_thresh <span class="ot">&lt;-</span> out<span class="sc">$</span>perc_star</span>
+<span id="cb24-51"><a href="#cb24-51" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb24-52"><a href="#cb24-52" aria-hidden="true" tabindex="-1"></a>        <span class="co"># 2. Apply that same unified threshold across both Regimes individually</span></span>
+<span id="cb24-53"><a href="#cb24-53" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> (reg <span class="cf">in</span> <span class="fu">unique</span>(sub_df<span class="sc">$</span>regime)) {</span>
+<span id="cb24-54"><a href="#cb24-54" aria-hidden="true" tabindex="-1"></a>            reg_df <span class="ot">&lt;-</span> sub_df <span class="sc">%&gt;%</span> <span class="fu">filter</span>(regime <span class="sc">==</span> reg)</span>
+<span id="cb24-55"><a href="#cb24-55" aria-hidden="true" tabindex="-1"></a>            <span class="cf">if</span> (<span class="fu">nrow</span>(reg_df) <span class="sc">&gt;</span> <span class="dv">0</span>) {</span>
+<span id="cb24-56"><a href="#cb24-56" aria-hidden="true" tabindex="-1"></a>                cm_reg <span class="ot">&lt;-</span> <span class="fu">make_confusion</span>(reg_df, <span class="at">perc_thresh =</span> opt_thresh, <span class="at">cpue_thresh =</span> cp)</span>
+<span id="cb24-57"><a href="#cb24-57" aria-hidden="true" tabindex="-1"></a>                cm_reg<span class="sc">$</span>cm <span class="ot">&lt;-</span> cm_reg<span class="sc">$</span>cm <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">radius =</span> r, <span class="at">regime =</span> reg, <span class="at">cpue_thr =</span> cp, <span class="at">perc_star =</span> opt_thresh)</span>
+<span id="cb24-58"><a href="#cb24-58" aria-hidden="true" tabindex="-1"></a>                cms_all[[<span class="fu">paste0</span>(r, <span class="st">"_"</span>, reg)]] <span class="ot">&lt;-</span> cm_reg<span class="sc">$</span>cm</span>
+<span id="cb24-59"><a href="#cb24-59" aria-hidden="true" tabindex="-1"></a>            }</span>
+<span id="cb24-60"><a href="#cb24-60" aria-hidden="true" tabindex="-1"></a>        }</span>
+<span id="cb24-61"><a href="#cb24-61" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb24-62"><a href="#cb24-62" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb24-63"><a href="#cb24-63" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> (<span class="fu">length</span>(cms_all) <span class="sc">&gt;</span> <span class="dv">0</span>) {</span>
+<span id="cb24-64"><a href="#cb24-64" aria-hidden="true" tabindex="-1"></a>        df_cm <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(cms_all)</span>
+<span id="cb24-65"><a href="#cb24-65" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb24-66"><a href="#cb24-66" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Explicitly order the column labels by Radius numerically</span></span>
+<span id="cb24-67"><a href="#cb24-67" aria-hidden="true" tabindex="-1"></a>        lbl_order <span class="ot">&lt;-</span> df_cm <span class="sc">%&gt;%</span> </span>
+<span id="cb24-68"><a href="#cb24-68" aria-hidden="true" tabindex="-1"></a>            dplyr<span class="sc">::</span><span class="fu">select</span>(radius, perc_star) <span class="sc">%&gt;%</span> </span>
+<span id="cb24-69"><a href="#cb24-69" aria-hidden="true" tabindex="-1"></a>            <span class="fu">distinct</span>() <span class="sc">%&gt;%</span> </span>
+<span id="cb24-70"><a href="#cb24-70" aria-hidden="true" tabindex="-1"></a>            <span class="fu">arrange</span>(radius) <span class="sc">%&gt;%</span></span>
+<span id="cb24-71"><a href="#cb24-71" aria-hidden="true" tabindex="-1"></a>            <span class="fu">mutate</span>(<span class="at">lbl =</span> <span class="fu">paste0</span>(radius, <span class="st">"</span><span class="sc">\n</span><span class="st">Global %pos* = "</span>, perc_star)) <span class="sc">%&gt;%</span></span>
+<span id="cb24-72"><a href="#cb24-72" aria-hidden="true" tabindex="-1"></a>            <span class="fu">pull</span>(lbl)</span>
+<span id="cb24-73"><a href="#cb24-73" aria-hidden="true" tabindex="-1"></a>            </span>
+<span id="cb24-74"><a href="#cb24-74" aria-hidden="true" tabindex="-1"></a>        df_cm <span class="ot">&lt;-</span> df_cm <span class="sc">%&gt;%</span></span>
+<span id="cb24-75"><a href="#cb24-75" aria-hidden="true" tabindex="-1"></a>            <span class="fu">mutate</span>(<span class="at">radius_lbl =</span> <span class="fu">factor</span>(<span class="fu">paste0</span>(radius, <span class="st">"</span><span class="sc">\n</span><span class="st">Global %pos* = "</span>, perc_star), <span class="at">levels =</span> lbl_order))</span>
+<span id="cb24-76"><a href="#cb24-76" aria-hidden="true" tabindex="-1"></a>            </span>
+<span id="cb24-77"><a href="#cb24-77" aria-hidden="true" tabindex="-1"></a>        p <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(df_cm, <span class="fu">aes</span>(<span class="at">x =</span> pred, <span class="at">y =</span> actual, <span class="at">fill =</span> row_prop)) <span class="sc">+</span></span>
+<span id="cb24-78"><a href="#cb24-78" aria-hidden="true" tabindex="-1"></a>            <span class="fu">geom_tile</span>(<span class="at">color =</span> <span class="st">"grey85"</span>, <span class="at">linewidth =</span> <span class="fl">0.4</span>) <span class="sc">+</span></span>
+<span id="cb24-79"><a href="#cb24-79" aria-hidden="true" tabindex="-1"></a>            <span class="fu">geom_text</span>(<span class="fu">aes</span>(<span class="at">label =</span> label), <span class="at">size =</span> <span class="dv">3</span>, <span class="at">color =</span> <span class="st">"black"</span>) <span class="sc">+</span></span>
+<span id="cb24-80"><a href="#cb24-80" aria-hidden="true" tabindex="-1"></a>            <span class="fu">facet_grid</span>(regime <span class="sc">~</span> radius_lbl) <span class="sc">+</span></span>
+<span id="cb24-81"><a href="#cb24-81" aria-hidden="true" tabindex="-1"></a>            <span class="fu">scale_fill_viridis_c</span>(<span class="at">option =</span> <span class="st">"mako"</span>, <span class="at">direction =</span> <span class="sc">-</span><span class="dv">1</span>, <span class="at">begin =</span> <span class="fl">0.25</span>, <span class="at">limits =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>), <span class="at">name =</span> <span class="st">"Row Rate"</span>) <span class="sc">+</span></span>
+<span id="cb24-82"><a href="#cb24-82" aria-hidden="true" tabindex="-1"></a>            <span class="fu">labs</span>(</span>
+<span id="cb24-83"><a href="#cb24-83" aria-hidden="true" tabindex="-1"></a>                <span class="at">x =</span> <span class="st">"Prediction from eDNA (% pos)"</span>,</span>
+<span id="cb24-84"><a href="#cb24-84" aria-hidden="true" tabindex="-1"></a>                <span class="at">y =</span> <span class="st">"Ground truth from explicit Local Site CPUE"</span>,</span>
+<span id="cb24-85"><a href="#cb24-85" aria-hidden="true" tabindex="-1"></a>                <span class="at">title =</span> <span class="fu">sprintf</span>(<span class="st">"Site-Level Confusion Matrices (CPUE ≥ %.2f) with Unified Radial Thresholds"</span>, cp)</span>
+<span id="cb24-86"><a href="#cb24-86" aria-hidden="true" tabindex="-1"></a>            ) <span class="sc">+</span></span>
+<span id="cb24-87"><a href="#cb24-87" aria-hidden="true" tabindex="-1"></a>            <span class="fu">coord_fixed</span>()</span>
+<span id="cb24-88"><a href="#cb24-88" aria-hidden="true" tabindex="-1"></a>        <span class="fu">return</span>(<span class="fu">list</span>(<span class="at">p =</span> p, <span class="at">cm =</span> df_cm))</span>
+<span id="cb24-89"><a href="#cb24-89" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb24-90"><a href="#cb24-90" aria-hidden="true" tabindex="-1"></a>    <span class="fu">return</span>(<span class="cn">NULL</span>)</span>
+<span id="cb24-91"><a href="#cb24-91" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb24-92"><a href="#cb24-92" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-93"><a href="#cb24-93" aria-hidden="true" tabindex="-1"></a>res_04 <span class="ot">&lt;-</span> <span class="fu">evaluate_unified_spatial</span>(df_spatial, <span class="fl">0.04</span>)</span>
+<span id="cb24-94"><a href="#cb24-94" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">is.null</span>(res_04)) {</span>
+<span id="cb24-95"><a href="#cb24-95" aria-hidden="true" tabindex="-1"></a>    p_spatial_04 <span class="ot">&lt;-</span> res_04<span class="sc">$</span>p</span>
+<span id="cb24-96"><a href="#cb24-96" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span>(p_spatial_04)</span>
+<span id="cb24-97"><a href="#cb24-97" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
 <div>
@@ -1127,7 +1148,276 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
 </figure>
 </div>
 </div>
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>res_02 <span class="ot">&lt;-</span> <span class="fu">evaluate_unified_spatial</span>(df_spatial, <span class="fl">0.02</span>)</span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">is.null</span>(res_02)) {</span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>    p_spatial_02 <span class="ot">&lt;-</span> res_02<span class="sc">$</span>p</span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span>(p_spatial_02)</span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="eDNA_CPUE_Comparison_files/figure-html/spatial-buffers-2.png" class="img-fluid figure-img" width="1152"></p>
+</figure>
 </div>
+</div>
+</div>
+<section id="interpretation-of-spatial-validation-metrics" class="level3">
+<h3 class="anchored" data-anchor-id="interpretation-of-spatial-validation-metrics">Interpretation of Spatial Validation Metrics</h3>
+<p>To comprehensively evaluate how effectively explicit geographic thresholds constrain eDNA predictive capabilities, we calculate several rigorous statistical classifications:</p>
+<ul>
+<li><strong>True Positive Rate (TPR) / Sensitivity</strong>: The proportion of strictly validated COTS occurrences (<code>CPUE &gt;= Target</code>) that the eDNA signal correctly bounded. A high sensitivity guarantees we rarely miss active physical outbreaks.</li>
+<li><strong>False Positive Rate (FPR)</strong>: The proportion of strictly negative or safe sites (<code>CPUE &lt; Target</code>) that triggered a false alarm on the eDNA index. Lower is structurally better to limit wasted physical deployment sweeps.</li>
+<li><strong>Precision</strong>: When the algorithm <em>does</em> indicate a COTS outbreak based on <code>% Pos</code>, what percentage of the time was it structurally correct natively? High precision binds deployment efficiency.</li>
+<li><strong>F1 Score</strong>: The harmonized harmonic mean between Precision and Sensitivity. Given the inherent complexities of mapping fragmented temporal overlap grids into strict metric bounds, the models optimized explicitly towards max <code>F1</code> to balance outbreak responsiveness securely alongside environmental noise.</li>
+</ul>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a>metrics_list <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="fu">exists</span>(<span class="st">"res_04"</span>) <span class="sc">&amp;&amp;</span> <span class="sc">!</span><span class="fu">is.null</span>(res_04)) metrics_list[[<span class="st">"0.04"</span>]] <span class="ot">&lt;-</span> res_04<span class="sc">$</span>cm</span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="fu">exists</span>(<span class="st">"res_02"</span>) <span class="sc">&amp;&amp;</span> <span class="sc">!</span><span class="fu">is.null</span>(res_02)) metrics_list[[<span class="st">"0.02"</span>]] <span class="ot">&lt;-</span> res_02<span class="sc">$</span>cm</span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="fu">length</span>(metrics_list) <span class="sc">&gt;</span> <span class="dv">0</span>) {</span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a>    df_metrics <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(metrics_list, <span class="at">.id =</span> <span class="st">"CPUE"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a>        <span class="fu">mutate</span>(<span class="at">class =</span> <span class="fu">case_when</span>(</span>
+<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a>            pred <span class="sc">==</span> <span class="st">"Pred +"</span> <span class="sc">&amp;</span> actual <span class="sc">==</span> <span class="st">"Actual +"</span> <span class="sc">~</span> <span class="st">"TP"</span>,</span>
+<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a>            pred <span class="sc">==</span> <span class="st">"Pred +"</span> <span class="sc">&amp;</span> actual <span class="sc">==</span> <span class="st">"Actual -"</span> <span class="sc">~</span> <span class="st">"FP"</span>,</span>
+<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a>            pred <span class="sc">==</span> <span class="st">"Pred -"</span> <span class="sc">&amp;</span> actual <span class="sc">==</span> <span class="st">"Actual +"</span> <span class="sc">~</span> <span class="st">"FN"</span>,</span>
+<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a>            pred <span class="sc">==</span> <span class="st">"Pred -"</span> <span class="sc">&amp;</span> actual <span class="sc">==</span> <span class="st">"Actual -"</span> <span class="sc">~</span> <span class="st">"TN"</span></span>
+<span id="cb26-12"><a href="#cb26-12" aria-hidden="true" tabindex="-1"></a>        )) <span class="sc">%&gt;%</span></span>
+<span id="cb26-13"><a href="#cb26-13" aria-hidden="true" tabindex="-1"></a>        dplyr<span class="sc">::</span><span class="fu">select</span>(CPUE, radius, regime, perc_star, class, n) <span class="sc">%&gt;%</span></span>
+<span id="cb26-14"><a href="#cb26-14" aria-hidden="true" tabindex="-1"></a>        <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> class, <span class="at">values_from =</span> n, <span class="at">values_fill =</span> <span class="fu">list</span>(<span class="at">n =</span> <span class="dv">0</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb26-15"><a href="#cb26-15" aria-hidden="true" tabindex="-1"></a>        <span class="fu">mutate</span>(</span>
+<span id="cb26-16"><a href="#cb26-16" aria-hidden="true" tabindex="-1"></a>            <span class="at">TPR =</span> TP <span class="sc">/</span> (TP <span class="sc">+</span> FN <span class="sc">+</span> <span class="fl">1e-9</span>),</span>
+<span id="cb26-17"><a href="#cb26-17" aria-hidden="true" tabindex="-1"></a>            <span class="at">Sensitivity =</span> TPR,</span>
+<span id="cb26-18"><a href="#cb26-18" aria-hidden="true" tabindex="-1"></a>            <span class="at">FPR =</span> FP <span class="sc">/</span> (FP <span class="sc">+</span> TN <span class="sc">+</span> <span class="fl">1e-9</span>),</span>
+<span id="cb26-19"><a href="#cb26-19" aria-hidden="true" tabindex="-1"></a>            <span class="at">Precision =</span> TP <span class="sc">/</span> (TP <span class="sc">+</span> FP <span class="sc">+</span> <span class="fl">1e-9</span>),</span>
+<span id="cb26-20"><a href="#cb26-20" aria-hidden="true" tabindex="-1"></a>            <span class="at">F1 =</span> <span class="dv">2</span> <span class="sc">*</span> (Precision <span class="sc">*</span> TPR) <span class="sc">/</span> (Precision <span class="sc">+</span> TPR <span class="sc">+</span> <span class="fl">1e-9</span>)</span>
+<span id="cb26-21"><a href="#cb26-21" aria-hidden="true" tabindex="-1"></a>        ) <span class="sc">%&gt;%</span></span>
+<span id="cb26-22"><a href="#cb26-22" aria-hidden="true" tabindex="-1"></a>        <span class="fu">arrange</span>(CPUE, radius, regime) <span class="sc">%&gt;%</span></span>
+<span id="cb26-23"><a href="#cb26-23" aria-hidden="true" tabindex="-1"></a>        dplyr<span class="sc">::</span><span class="fu">select</span>(</span>
+<span id="cb26-24"><a href="#cb26-24" aria-hidden="true" tabindex="-1"></a>            CPUE, <span class="at">Radius =</span> radius, <span class="at">Regime =</span> regime, <span class="st">`</span><span class="at">% Pos Target</span><span class="st">`</span> <span class="ot">=</span> perc_star, </span>
+<span id="cb26-25"><a href="#cb26-25" aria-hidden="true" tabindex="-1"></a>            TPR, FPR, Sensitivity, Precision, F1</span>
+<span id="cb26-26"><a href="#cb26-26" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb26-27"><a href="#cb26-27" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb26-28"><a href="#cb26-28" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Expose the formatted statistics natively inside the rendered workflow</span></span>
+<span id="cb26-29"><a href="#cb26-29" aria-hidden="true" tabindex="-1"></a>    df_metrics <span class="sc">%&gt;%</span></span>
+<span id="cb26-30"><a href="#cb26-30" aria-hidden="true" tabindex="-1"></a>        <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">c</span>(TPR, FPR, Sensitivity, Precision, F1), <span class="sc">~</span> <span class="fu">round</span>(.x, <span class="dv">3</span>))) <span class="sc">%&gt;%</span></span>
+<span id="cb26-31"><a href="#cb26-31" aria-hidden="true" tabindex="-1"></a>        knitr<span class="sc">::</span><span class="fu">kable</span>(<span class="at">caption =</span> <span class="st">"Site-Level Performance Statistics bounded by Spatial Extents &amp; Regimes"</span>)</span>
+<span id="cb26-32"><a href="#cb26-32" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<caption>Site-Level Performance Statistics bounded by Spatial Extents &amp; Regimes</caption>
+<colgroup>
+<col style="width: 5%">
+<col style="width: 15%">
+<col style="width: 15%">
+<col style="width: 15%">
+<col style="width: 7%">
+<col style="width: 7%">
+<col style="width: 14%">
+<col style="width: 11%">
+<col style="width: 7%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">CPUE</th>
+<th style="text-align: left;">Radius</th>
+<th style="text-align: left;">Regime</th>
+<th style="text-align: right;">% Pos Target</th>
+<th style="text-align: right;">TPR</th>
+<th style="text-align: right;">FPR</th>
+<th style="text-align: right;">Sensitivity</th>
+<th style="text-align: right;">Precision</th>
+<th style="text-align: right;">F1</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">0.02</td>
+<td style="text-align: left;">1000m Radius</td>
+<td style="text-align: left;">3x12 Density</td>
+<td style="text-align: right;">60</td>
+<td style="text-align: right;">0.947</td>
+<td style="text-align: right;">0.404</td>
+<td style="text-align: right;">0.947</td>
+<td style="text-align: right;">0.720</td>
+<td style="text-align: right;">0.818</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">0.02</td>
+<td style="text-align: left;">1000m Radius</td>
+<td style="text-align: left;">4x6 Density</td>
+<td style="text-align: right;">60</td>
+<td style="text-align: right;">0.714</td>
+<td style="text-align: right;">0.286</td>
+<td style="text-align: right;">0.714</td>
+<td style="text-align: right;">0.625</td>
+<td style="text-align: right;">0.667</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">0.02</td>
+<td style="text-align: left;">2000m Radius</td>
+<td style="text-align: left;">3x12 Density</td>
+<td style="text-align: right;">46</td>
+<td style="text-align: right;">0.855</td>
+<td style="text-align: right;">0.508</td>
+<td style="text-align: right;">0.855</td>
+<td style="text-align: right;">0.696</td>
+<td style="text-align: right;">0.768</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">0.02</td>
+<td style="text-align: left;">2000m Radius</td>
+<td style="text-align: left;">4x6 Density</td>
+<td style="text-align: right;">46</td>
+<td style="text-align: right;">0.900</td>
+<td style="text-align: right;">0.100</td>
+<td style="text-align: right;">0.900</td>
+<td style="text-align: right;">0.900</td>
+<td style="text-align: right;">0.900</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">0.02</td>
+<td style="text-align: left;">200m Radius</td>
+<td style="text-align: left;">3x12 Density</td>
+<td style="text-align: right;">52</td>
+<td style="text-align: right;">0.905</td>
+<td style="text-align: right;">0.364</td>
+<td style="text-align: right;">0.905</td>
+<td style="text-align: right;">0.826</td>
+<td style="text-align: right;">0.864</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">0.02</td>
+<td style="text-align: left;">200m Radius</td>
+<td style="text-align: left;">4x6 Density</td>
+<td style="text-align: right;">52</td>
+<td style="text-align: right;">1.000</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">1.000</td>
+<td style="text-align: right;">1.000</td>
+<td style="text-align: right;">1.000</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">0.02</td>
+<td style="text-align: left;">500m Radius</td>
+<td style="text-align: left;">3x12 Density</td>
+<td style="text-align: right;">46</td>
+<td style="text-align: right;">0.958</td>
+<td style="text-align: right;">0.543</td>
+<td style="text-align: right;">0.958</td>
+<td style="text-align: right;">0.708</td>
+<td style="text-align: right;">0.814</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">0.02</td>
+<td style="text-align: left;">500m Radius</td>
+<td style="text-align: left;">4x6 Density</td>
+<td style="text-align: right;">46</td>
+<td style="text-align: right;">0.917</td>
+<td style="text-align: right;">0.267</td>
+<td style="text-align: right;">0.917</td>
+<td style="text-align: right;">0.733</td>
+<td style="text-align: right;">0.815</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">0.04</td>
+<td style="text-align: left;">1000m Radius</td>
+<td style="text-align: left;">3x12 Density</td>
+<td style="text-align: right;">84</td>
+<td style="text-align: right;">0.765</td>
+<td style="text-align: right;">0.240</td>
+<td style="text-align: right;">0.765</td>
+<td style="text-align: right;">0.591</td>
+<td style="text-align: right;">0.667</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">0.04</td>
+<td style="text-align: left;">1000m Radius</td>
+<td style="text-align: left;">4x6 Density</td>
+<td style="text-align: right;">84</td>
+<td style="text-align: right;">0.333</td>
+<td style="text-align: right;">0.130</td>
+<td style="text-align: right;">0.333</td>
+<td style="text-align: right;">0.571</td>
+<td style="text-align: right;">0.421</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">0.04</td>
+<td style="text-align: left;">2000m Radius</td>
+<td style="text-align: left;">3x12 Density</td>
+<td style="text-align: right;">64</td>
+<td style="text-align: right;">0.895</td>
+<td style="text-align: right;">0.481</td>
+<td style="text-align: right;">0.895</td>
+<td style="text-align: right;">0.400</td>
+<td style="text-align: right;">0.553</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">0.04</td>
+<td style="text-align: left;">2000m Radius</td>
+<td style="text-align: left;">4x6 Density</td>
+<td style="text-align: right;">64</td>
+<td style="text-align: right;">0.687</td>
+<td style="text-align: right;">0.250</td>
+<td style="text-align: right;">0.687</td>
+<td style="text-align: right;">0.647</td>
+<td style="text-align: right;">0.667</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">0.04</td>
+<td style="text-align: left;">200m Radius</td>
+<td style="text-align: left;">3x12 Density</td>
+<td style="text-align: right;">94</td>
+<td style="text-align: right;">0.700</td>
+<td style="text-align: right;">0.136</td>
+<td style="text-align: right;">0.700</td>
+<td style="text-align: right;">0.700</td>
+<td style="text-align: right;">0.700</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">0.04</td>
+<td style="text-align: left;">200m Radius</td>
+<td style="text-align: left;">4x6 Density</td>
+<td style="text-align: right;">94</td>
+<td style="text-align: right;">0.750</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">0.750</td>
+<td style="text-align: right;">1.000</td>
+<td style="text-align: right;">0.857</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">0.04</td>
+<td style="text-align: left;">500m Radius</td>
+<td style="text-align: left;">3x12 Density</td>
+<td style="text-align: right;">84</td>
+<td style="text-align: right;">0.750</td>
+<td style="text-align: right;">0.273</td>
+<td style="text-align: right;">0.750</td>
+<td style="text-align: right;">0.583</td>
+<td style="text-align: right;">0.656</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">0.04</td>
+<td style="text-align: left;">500m Radius</td>
+<td style="text-align: left;">4x6 Density</td>
+<td style="text-align: right;">84</td>
+<td style="text-align: right;">0.400</td>
+<td style="text-align: right;">0.118</td>
+<td style="text-align: right;">0.400</td>
+<td style="text-align: right;">0.667</td>
+<td style="text-align: right;">0.500</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
 </section>
 
 </main>
