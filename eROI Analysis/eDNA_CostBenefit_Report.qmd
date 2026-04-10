@@ -1,0 +1,620 @@
+---
+title: "eDNA Cost-Benefit Analysis: Optimizing COTS Control"
+author: "Analysis Report"
+date: "`r Sys.Date()`"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    theme: cosmo
+    self-contained: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+library(dplyr)
+library(knitr)
+library(ggplot2)
+library(scales)
+library(tidyr)
+library(rpart)
+library(leaflet)
+library(sf)
+library(htmltools)
+library(stringr)
+
+# Read the processed data
+combined_data <- read.csv("combined_reef_analysis_v2.csv")
+top_20_annual <- read.csv("top_20_annual_wasted_v2.csv")
+full_matched_data <- read.csv("full_matched_data_v2.csv")
+
+# Baseline Financial Metrics
+cost_per_on_water_day <- 12000
+diver_hours_per_day <- 24
+cost_per_diver_hour <- cost_per_on_water_day / diver_hours_per_day # $500
+program_cost <- 300000
+total_reefs_surveyed <- 120
+tactical_reefs <- 20
+operational_tactical_reefs <- tactical_reefs + 20 # User requested repurposing 20 monitoring reefs for a total of 40 tactically scoped reefs
+edna_cost_per_reef <- program_cost / total_reefs_surveyed # $2,500
+```
+
+## Executive Summary
+
+This report evaluates the potential return on investment (ROI) of incorporating eDNA surveys into the Crown-of-Thorns Starfish (COTS) control program to safely identify and "close" tactical reefs. By eliminating "ghost culling"—the effort spent culling reefs that lack significant COTS populations—the program could redirect significant vessel and diver time.
+
+This analysis relies on actual historical cull efficiency data matched with eDNA records since 2020.
+
+### Baseline Unit Costs
+
+* **Cost per Diver Hour:** `r dollar(cost_per_diver_hour)`
+* **eDNA Program Total Cost:** `r dollar(program_cost)`
+* **Assumed Number of Tactical Reefs (per year):** `r operational_tactical_reefs` (Assumes 20 targeted reefs + repurposing 20 monitoring reefs)
+* **eDNA Average Cost per Reef:** `r dollar(edna_cost_per_reef)`
+
+---
+
+## Historical eDNA Efficacy Assessment (2020-Present)
+
+Rather than just looking at the worst performing reefs, we have broadened our search to **all reefs that have both eDNA and active culling data since 2020**.
+
+We evaluate eDNA rigorously as a diagnostic test to see what would have happened if we explicitly closed reefs based on statistical combinations.
+
+### Classification Logic & Defining "Ghost Culls"
+
+To rigorously score False Positives and False Negatives, we must define the ultimate ground truth.
+*   **The Predictor Rule (Prediction):** A statistical cutoff indicating whether we should "Close" our vessel operations or keep the reef "Open" for diving.
+*   **The Ground Truth (Actual Cull Outcome):** 
+    *   *Current Assumption:* An **Outbreak (Needed)** is formally declared if *any* dive on that reef registered a CPUE $> 0.04$. If a reef met this criteria, diving was validated. 
+    *   *What is a Ghost Cull?* A **Ghost Cull (False Positive)** is classified when the predictor rule says we should keep the reef open to cull it, but following the initial Manta Tows/scouts, the subsequent Culling Data proves that **zero dives ever exceeded 0.04 CPUE**. In other words, if a reef actually had dives recovering $> 0.04$ CPUE, it is completely exonerated—it is *not* a ghost cull, and our models strictly punish the metric (registering a False Negative Missed Outbreak) if we mistakenly attempted to close it.
+
+### Baseline Confusion Matrix (eDNA Only)
+
+If we applied the `< 45%` rule retrospectively to all fully matched reef/years, these are the outcomes:
+
+```{r confusion-matrix}
+matrix_data <- full_matched_data %>%
+    mutate(
+        Predict_Close = eDNA_Pct_Positive < 45,
+        Truth_Needed = (Proportion_NeededLow > 0) | (Proportion_NeededHigh > 0), # Was there an outbreak?
+        Confusion_Class = case_when(
+            Predict_Close & !Truth_Needed ~ "True Negative (Correctly Closed)",
+            Predict_Close & Truth_Needed ~ "False Negative (Missed Outbreak)",
+            !Predict_Close & Truth_Needed ~ "True Positive (Correctly Kept Open)",
+            !Predict_Close & !Truth_Needed ~ "False Positive (Ghost Culled)"
+        )
+    )
+
+conf_summary <- matrix_data %>%
+    group_by(Confusion_Class) %>%
+    summarise(
+        `Reef Occurrences` = n(),
+        `Diver Hrs Rep` = round(sum(Total_Diver_Hours), 1),
+        `0-0.02 Hrs (%)` = paste0(round((sum(Wasted_Diver_Hours) / max(sum(Total_Diver_Hours), 1)) * 100, 1), "%"),
+        `0.02-0.04 Hrs (%)` = paste0(round((sum(Borderline_Diver_Hours) / max(sum(Total_Diver_Hours), 1)) * 100, 1), "%"),
+        `0.04-0.08 Hrs (%)` = paste0(round((sum(NeededLow_Diver_Hours) / max(sum(Total_Diver_Hours), 1)) * 100, 1), "%"),
+        `>0.08 Hrs (%)` = paste0(round((sum(NeededHigh_Diver_Hours) / max(sum(Total_Diver_Hours), 1)) * 100, 1), "%")
+    ) %>%
+    arrange(desc(`Reef Occurrences`))
+
+kable(conf_summary, caption = "Baseline eDNA Confusion Matrix (with Diver Hour bins)")
+```
+
+---
+
+## Multivariate Diagnostic Engine
+
+To aggressively eliminate False Negatives (missed outbreaks) and False Positives (wasted culling trips), we can synthesize additional site data. By bringing in **Manta Tow Scars** and applying an **Initial Scout Cull** (recording CPUE strictly from the first day on-site before committing heavily to the reef), we enhance prediction accuracy.
+
+### Baseline Comparison: Manta Scars Only
+
+To fully understand the value eDNA adds, we must evaluate what happens if we operate solely on traditional Manta Tow scarring data. **Close Reef IF Manta Scars < 10%**:
+
+```{r baseline-scars-only}
+matrix_data_scars <- matrix_data %>%
+  mutate(
+    Pct_Tows_With_Scars = replace_na(Pct_Tows_With_Scars, 0),
+    Predict_Close_Scars = (Pct_Tows_With_Scars < 10),
+    Confusion_Class_Scars = case_when(
+      Predict_Close_Scars & !Truth_Needed ~ "True Negative (Correctly Closed)",
+      Predict_Close_Scars & Truth_Needed  ~ "False Negative (Missed Outbreak)",
+      !Predict_Close_Scars & Truth_Needed ~ "True Positive (Correctly Kept Open)",
+      !Predict_Close_Scars & !Truth_Needed ~ "False Positive (Ghost Culled)"
+    )
+  )
+
+conf_summary_scars <- matrix_data_scars %>%
+  group_by(Confusion_Class_Scars) %>%
+  summarise(
+      `Reef Occurrences` = n(),
+      `Diver Hrs Rep` = round(sum(Total_Diver_Hours), 1)
+  ) %>%
+  arrange(desc(`Reef Occurrences`))
+
+kable(conf_summary_scars, caption = "Univariate Baseline: Scars < 10% (No eDNA factors)")
+```
+
+### Hardcoded Rule: eDNA combined with Manta Scars
+
+If we refine the rule to mathematically state: **Close Reef IF (eDNA < 45%) AND (Manta Scars < 10%)**:
+
+```{r mv-hardcoded}
+matrix_data_r1 <- matrix_data %>%
+    mutate(
+        Pct_Tows_With_Scars = replace_na(Pct_Tows_With_Scars, 0),
+        Predict_Close = (eDNA_Pct_Positive < 45) & (Pct_Tows_With_Scars < 10),
+        Confusion_Class_R1 = case_when(
+            Predict_Close & !Truth_Needed ~ "True Negative (Correctly Closed)",
+            Predict_Close & Truth_Needed ~ "False Negative (Missed Outbreak)",
+            !Predict_Close & Truth_Needed ~ "True Positive (Correctly Kept Open)",
+            !Predict_Close & !Truth_Needed ~ "False Positive (Ghost Culled)"
+        )
+    )
+
+conf_summary_r1 <- matrix_data_r1 %>%
+    group_by(Confusion_Class_R1) %>%
+    summarise(
+        `Reef Occurrences` = n(),
+        `Diver Hrs Rep` = round(sum(Total_Diver_Hours), 1)
+    ) %>%
+    arrange(desc(`Reef Occurrences`))
+
+kable(conf_summary_r1, caption = "Multivariate Rule 1 (eDNA + Scars)")
+```
+
+### Baseline Comparison 2: Field Data Only (Scars + Scout Cull)
+
+Before utilizing expensive eDNA processing, what happens if we strictly merge our free, existing field data? **Close Reef IF (Manta Scars < 15%) AND (Initial Scout CPUE < 0.02)**. *(Note: Because this rule inherently requires the Initial Scout Cull, we deduct Scout Diver Hours from the True Negative yield).*
+
+```{r baseline-field-only}
+matrix_data_field <- matrix_data %>%
+  mutate(
+    Pct_Tows_With_Scars = replace_na(Pct_Tows_With_Scars, 0),
+    Initial_CPUE = replace_na(Initial_CPUE, 0),
+    Predict_Close = (Pct_Tows_With_Scars < 15) & (Initial_CPUE < 0.02),
+    Confusion_Class_Field = case_when(
+      Predict_Close & !Truth_Needed ~ "True Negative (Correctly Closed)",
+      Predict_Close & Truth_Needed  ~ "False Negative (Missed Outbreak)",
+      !Predict_Close & Truth_Needed ~ "True Positive (Correctly Kept Open)",
+      !Predict_Close & !Truth_Needed ~ "False Positive (Ghost Culled)"
+    ),
+    Net_Saved_Hrs = ifelse(Confusion_Class_Field == "True Negative (Correctly Closed)", Total_Diver_Hours - Scout_Diver_Hours, Total_Diver_Hours)
+  )
+
+conf_summary_field <- matrix_data_field %>%
+  group_by(Confusion_Class_Field) %>%
+  summarise(
+      `Reef Occurrences` = n(),
+      `Net Diver Hrs Rep` = round(sum(Net_Saved_Hrs, na.rm=TRUE), 1)
+  ) %>%
+  arrange(desc(`Reef Occurrences`))
+
+kable(conf_summary_field, caption = "Baseline 2: Field Rules strictly (Scars < 15% + Scout Culling < 0.02)")
+```
+
+### Hardcoded Rule 2: eDNA, Manta Scars, and Initial Scout CPUE
+
+If we deploy a highly integrated diagnostic expanding the relaxed envelopes but demanding an in-water check: **Close Reef IF (eDNA < 50%) AND (Manta Scars < 15%) AND (Initial Scout CPUE < 0.02)**:
+*(Note: Because this rule requires the Initial Scout Cull, we mathematically deduct the Scout Diver Hours from the functionally Saved Hours yield).*
+
+```{r mv-hardcoded-2}
+matrix_data_r2 <- matrix_data %>%
+  mutate(
+    Pct_Tows_With_Scars = replace_na(Pct_Tows_With_Scars, 0),
+    Initial_CPUE = replace_na(Initial_CPUE, 0),
+    Predict_Close = (eDNA_Pct_Positive < 50) & (Pct_Tows_With_Scars < 15) & (Initial_CPUE < 0.02),
+    Confusion_Class_R2 = case_when(
+      Predict_Close & !Truth_Needed ~ "True Negative (Correctly Closed)",
+      Predict_Close & Truth_Needed  ~ "False Negative (Missed Outbreak)",
+      !Predict_Close & Truth_Needed ~ "True Positive (Correctly Kept Open)",
+      !Predict_Close & !Truth_Needed ~ "False Positive (Ghost Culled)"
+    ),
+    Net_Saved_Hrs = ifelse(Confusion_Class_R2 == "True Negative (Correctly Closed)", Total_Diver_Hours - Scout_Diver_Hours, Total_Diver_Hours)
+  )
+
+conf_summary_r2 <- matrix_data_r2 %>%
+  group_by(Confusion_Class_R2) %>%
+  summarise(
+      `Reef Occurrences` = n(),
+      `Net Diver Hrs Rep` = round(sum(Net_Saved_Hrs, na.rm=TRUE), 1)
+  ) %>%
+  arrange(desc(`Reef Occurrences`))
+
+kable(conf_summary_r2, caption = "Multivariate Rule 2 (eDNA + Scars + Scout Culling)")
+```
+
+### Algorithmic Optimization (Decision Trees via rpart)
+
+A decision tree (`rpart`) mathematically scans historical records across eDNA, Manta Tow, and Initial CPUE variables to determine absolute optimal thresholds for closure decisions. 
+*(Note: Because these models inherently require divers doing an initial scout cull to get `Initial_CPUE`, the ultimate "Saved Hours" in these models formally subtracts those day-1 Scout Diver Hours from the savings yield).*
+
+Instead of blindly eliminating all False Positives or False Negatives completely, we present three models based on standard statistical weighting metrics:
+
+```{r ml-data-prep}
+ml_data <- matrix_data %>%
+    mutate(
+        Pct_Tows_With_Scars = replace_na(Pct_Tows_With_Scars, 0),
+        Initial_CPUE = replace_na(Initial_CPUE, 0),
+        Truth_Needed_Factor = factor(ifelse(Truth_Needed, "Outbreak", "Ghost"))
+    )
+```
+
+#### Model 1: Balanced Accuracy 
+
+**Focus:** Treats Ghost Culling and Missed Outbreaks equally (1:1 ratio). Optimizes purely for the highest raw predictive accuracy (Gini index). This represents an operational baseline.
+
+```{r ml-balanced}
+tree_bal <- rpart(Truth_Needed_Factor ~ eDNA_Pct_Positive + Pct_Tows_With_Scars + Initial_CPUE, 
+    data = ml_data, method="class")
+
+# Determine if Initial_CPUE was used to conditionally subtract scout hours
+used_scout_bal <- "Initial_CPUE" %in% tree_bal$frame$var
+
+ml_data$Pred_Bal <- predict(tree_bal, type = "class")
+ml_data <- ml_data %>%
+    mutate(
+        Class_Bal = case_when(
+            Pred_Bal == "Ghost" & Truth_Needed_Factor == "Ghost" ~ "True Negative (Correctly Closed)",
+            Pred_Bal == "Ghost" & Truth_Needed_Factor == "Outbreak" ~ "False Negative (Missed Outbreak)",
+            Pred_Bal == "Outbreak" & Truth_Needed_Factor == "Outbreak" ~ "True Positive (Correctly Kept Open)",
+            Pred_Bal == "Outbreak" & Truth_Needed_Factor == "Ghost" ~ "False Positive (Ghost Culled)"
+        ),
+        Net_Saved_Bal = ifelse(Class_Bal == "True Negative (Correctly Closed)" & used_scout_bal, Total_Diver_Hours - Scout_Diver_Hours, Total_Diver_Hours)
+    )
+
+kable(ml_data %>% group_by(Class_Bal) %>% summarise(`Reef Occurrences` = n(), `Net Diver Hrs` = round(sum(Net_Saved_Bal, na.rm = TRUE), 1)), caption = "Model 1: Balanced Accuracy Outcomes")
+
+plot(tree_bal, margin=0.1, main="Threshold Splitting Rules: Balanced Accuracy")
+text(tree_bal, use.n=TRUE, all=TRUE, cex=0.8)
+```
+
+#### Model 2: F1-Score Proxy (Harmonic Mean)
+
+**Focus:** The F1 Score acts as the harmonic mean between Precision and Recall. Because there are fewer real outbreaks than ghost reefs (class imbalance), we apply a calculated 2.5-to-1 penalty for missing an outbreak to achieve mathematically resilient F1 classification.
+
+```{r ml-f1}
+loss_f1 <- matrix(c(0, 2.5, 1, 0), byrow = TRUE, nrow = 2)
+tree_f1 <- rpart(Truth_Needed_Factor ~ eDNA_Pct_Positive + Pct_Tows_With_Scars + Initial_CPUE, 
+    data = ml_data, parms = list(loss = loss_f1))
+
+used_scout_f1 <- "Initial_CPUE" %in% tree_f1$frame$var
+
+ml_data$Pred_F1 <- predict(tree_f1, type = "class")
+ml_data <- ml_data %>%
+    mutate(
+        Class_F1 = case_when(
+            Pred_F1 == "Ghost" & Truth_Needed_Factor == "Ghost" ~ "True Negative (Correctly Closed)",
+            Pred_F1 == "Ghost" & Truth_Needed_Factor == "Outbreak" ~ "False Negative (Missed Outbreak)",
+            Pred_F1 == "Outbreak" & Truth_Needed_Factor == "Outbreak" ~ "True Positive (Correctly Kept Open)",
+            Pred_F1 == "Outbreak" & Truth_Needed_Factor == "Ghost" ~ "False Positive (Ghost Culled)"
+        ),
+        Net_Saved_F1 = ifelse(Class_F1 == "True Negative (Correctly Closed)" & used_scout_f1, Total_Diver_Hours - Scout_Diver_Hours, Total_Diver_Hours)
+    )
+
+kable(ml_data %>% group_by(Class_F1) %>% summarise(`Reef Occurrences` = n(), `Net Diver Hrs` = round(sum(Net_Saved_F1, na.rm = TRUE), 1)), caption = "Model 2: F1-Score Harmonic Mean Outcomes")
+
+plot(tree_f1, margin=0.1, main="Threshold Splitting Rules: F1-Score")
+text(tree_f1, use.n=TRUE, all=TRUE, cex=0.8)
+```
+
+#### Model 3: F2-Score Proxy (Eco-Conservative)
+
+**Focus:** The F2 Score weights Recall (Outbreak Detection) twice as heavily as Precision. We reflect this by imposing a 5-to-1 penalty against False Negatives. This guarantees an ecologically safe approach without collapsing into absolute zero-risk rigidity.
+
+```{r ml-f2}
+loss_f2 <- matrix(c(0, 5, 1, 0), byrow = TRUE, nrow = 2)
+tree_f2 <- rpart(Truth_Needed_Factor ~ eDNA_Pct_Positive + Pct_Tows_With_Scars + Initial_CPUE, 
+    data = ml_data, parms = list(loss = loss_f2))
+
+used_scout_f2 <- "Initial_CPUE" %in% tree_f2$frame$var
+
+ml_data$Pred_F2 <- predict(tree_f2, type = "class")
+ml_data <- ml_data %>%
+    mutate(
+        Class_F2 = case_when(
+            Pred_F2 == "Ghost" & Truth_Needed_Factor == "Ghost" ~ "True Negative (Correctly Closed)",
+            Pred_F2 == "Ghost" & Truth_Needed_Factor == "Outbreak" ~ "False Negative (Missed Outbreak)",
+            Pred_F2 == "Outbreak" & Truth_Needed_Factor == "Outbreak" ~ "True Positive (Correctly Kept Open)",
+            Pred_F2 == "Outbreak" & Truth_Needed_Factor == "Ghost" ~ "False Positive (Ghost Culled)"
+        ),
+        Net_Saved_F2 = ifelse(Class_F2 == "True Negative (Correctly Closed)" & used_scout_f2, Total_Diver_Hours - Scout_Diver_Hours, Total_Diver_Hours)
+    )
+
+kable(ml_data %>% group_by(Class_F2) %>% summarise(`Reef Occurrences` = n(), `Net Diver Hrs` = round(sum(Net_Saved_F2, na.rm = TRUE), 1)), caption = "Model 3: F2-Score Eco-Conservative Outcomes")
+
+plot(tree_f2, margin=0.1, main="Threshold Splitting Rules: F2-Score")
+text(tree_f2, use.n=TRUE, all=TRUE, cex=0.8)
+```
+
+### Potential Scale vs Operational Program
+
+By converting 20 historical monitoring reefs linearly into tactical targeted reefs, your operational program covers `r operational_tactical_reefs` total closure candidates annually. 
+
+For maximum financial transparency, we will directly compare deploying **Approach A (Field Data Only: Scars < 15%, CPUE < 0.02)** which carries zero equipment fees, directly against **Approach B (Highly Integrated Multivariate Rule 2: eDNA < 50%, Scars < 15%, CPUE < 0.02)**:
+
+```{r potential-scale}
+yearly_reef_counts <- matrix_data %>%
+  group_by(Year) %>%
+  summarise(
+    `Reefs Tested` = n()
+  )
+
+kable(yearly_reef_counts, caption = "Number of Unique Historical Target Validations per Year")
+```
+
+```{r matrix-metrics}
+Total_Reefs_Ever_Tested <- sum(matrix_data_r2 %>% nrow())
+
+# Approach A: Field Data Only
+TN_hrs_field <- sum(matrix_data_field$Net_Saved_Hrs[matrix_data_field$Confusion_Class_Field == "True Negative (Correctly Closed)"], na.rm = TRUE)
+FN_count_field <- sum(matrix_data_field$Confusion_Class_Field == "False Negative (Missed Outbreak)")
+Avg_Saved_Field <- TN_hrs_field / Total_Reefs_Ever_Tested
+Avg_FN_Field <- FN_count_field / Total_Reefs_Ever_Tested
+Operation_Saved_Field <- Avg_Saved_Field * operational_tactical_reefs
+Operation_FN_Field <- Avg_FN_Field * operational_tactical_reefs
+financial_savings_field <- Operation_Saved_Field * cost_per_diver_hour
+
+# Approach B: Field Data + eDNA (Rule 2)
+TN_hrs_r2 <- sum(matrix_data_r2$Net_Saved_Hrs[matrix_data_r2$Confusion_Class_R2 == "True Negative (Correctly Closed)"], na.rm = TRUE)
+FN_count_r2 <- sum(matrix_data_r2$Confusion_Class_R2 == "False Negative (Missed Outbreak)")
+Avg_Saved_R2 <- TN_hrs_r2 / Total_Reefs_Ever_Tested
+Avg_FN_R2 <- FN_count_r2 / Total_Reefs_Ever_Tested
+Operation_Saved_R2 <- Avg_Saved_R2 * operational_tactical_reefs
+Operation_FN_R2 <- Avg_FN_R2 * operational_tactical_reefs
+financial_savings_r2 <- Operation_Saved_R2 * cost_per_diver_hour
+
+# Calculate Absolute NET eDNA ROI
+cost_edna_testing <- operational_tactical_reefs * edna_cost_per_reef
+net_savings_r2 <- financial_savings_r2 - cost_edna_testing
+```
+
+#### Approach A: Field Data Only (Scout Culls & Manta Tows)
+*   **Operating Cost:** $0 extra.
+*   **Hours Safely Saved:** `r format_format(big.mark=",")(round(Operation_Saved_Field, 1))` diver hours returned programmatically per year.
+*   **Gross Dollar Savings:** `r dollar(financial_savings_field)`
+*   **Operational Risk:** Commits to returning those gross funds at the cost of mathematically missing **`r round(Operation_FN_Field, 1)`** genuine outbreaks per year.
+
+#### Approach B: Integrated eDNA Testing
+*   **Operating Cost:** Evaluating `r operational_tactical_reefs` tactical reefs functionally costs **`r dollar(cost_edna_testing)`** annually.
+*   **Hours Safely Saved:** Safely recovers `r format_format(big.mark=",")(round(Operation_Saved_R2, 1))` diver hours programmatically per year.
+*   **Gross Dollar Savings:** `r dollar(financial_savings_r2)`
+*   **Absolute NET Savings:** After paying the $`r format_format(big.mark=",")(cost_edna_testing)` lab/collection fees entirely strictly out of the vessel returns, the net organizational saving clears **`r dollar(net_savings_r2)`**.
+*   **Operational Risk:** Bounds the financial returns against an ecologically tighter constraint of missing only **`r round(Operation_FN_R2, 1)`** true localized outbreaks comparatively.
+
+---
+
+## Deep Dive: Most Recent Example Year
+
+The table below provides transparency out of the most recent example year to show you the hour breakdown by precise density bins alongside their associated metrics enabling multivariate closures.
+
+```{r table-recent-year}
+# We keep 2025 as the example deep dive
+most_recent_year <- max(combined_data$Year - 1, na.rm = TRUE)
+
+recent_top_20 <- top_20_annual %>%
+    filter(Year == most_recent_year) %>%
+    select(
+        ReefName,
+        Total_Diver_Hours,
+        Wasted_Diver_Hours,
+        Proportion_Wasted,
+        Proportion_Borderline,
+        Proportion_NeededLow,
+        Proportion_NeededHigh,
+        eDNA_Pct_Positive,
+        eDNA_Mean_Conc
+    ) %>%
+    mutate(
+        Total_Diver_Hours = round(Total_Diver_Hours, 1),
+        Wasted_Diver_Hours = round(Wasted_Diver_Hours, 1),
+        Proportion_Wasted = paste0(round(Proportion_Wasted * 100, 1), "%"),
+        Proportion_Borderline = paste0(round(Proportion_Borderline * 100, 1), "%"),
+        Proportion_NeededLow = paste0(round(Proportion_NeededLow * 100, 1), "%"),
+        Proportion_NeededHigh = paste0(round(Proportion_NeededHigh * 100, 1), "%"),
+        eDNA_Pct_Positive = paste0(round(eDNA_Pct_Positive, 1), "%"),
+        eDNA_Pct_Positive = ifelse(eDNA_Pct_Positive == "NA%", "No Data", eDNA_Pct_Positive),
+        eDNA_Mean_Conc = round(eDNA_Mean_Conc, 3)
+    ) %>%
+    arrange(desc(Wasted_Diver_Hours))
+
+kable(
+    recent_top_20,
+    col.names = c("Reef Name", "Tot Dive Hrs", "Wasted Dive Hrs", "% 0-0.02", "% 0.02-0.04", "% 0.04-0.08", "% >0.08", "eDNA % Pos", "eDNA Mean Conc"),
+    caption = paste("Worst-Performing Tactical Reefs in", most_recent_year, "(Deep Dive Example)")
+)
+```
+
+### Spatial Output: Risk Classification Map
+
+To fully visualize how these operational recommendations fall out across the GBR, this interactive map projects every historical validation event natively against the field landscape. Because each Reef may be tested in multiple different years, you can natively toggle the analytical projection overlay by **Year** using the layers control widget on the right. 
+
+You can cross-reference our operational "Approach A" (Field Data Only logic) directly against "Approach B" (Integrated eDNA framework) classifications natively over the raw historical sampling footprints.
+
+```{r map-generation}
+# 1. Base Geometry Linkage =======================================
+edna_raw <- readxl::read_excel("../data/eDNA data_ALL_20260225.xlsx", sheet = "eDNA_data_ALL")
+cull_raw <- readxl::read_excel("../data/260201_COTS-Cull-Data-Ewels.xlsx", sheet = "Cull")
+manta_raw <- read.csv("../data/COTS Program  Manta Tow Data-2026-02-04.csv", stringsAsFactors = FALSE)
+
+# Generate average lat/long per reef from edna raw data
+reef_coords <- edna_raw %>%
+  filter(!is.na(Lat) & !is.na(Long)) %>%
+  group_by(ReefName = ReefName) %>%
+  summarise(
+    Lat = mean(as.numeric(Lat), na.rm = TRUE),
+    Long = mean(as.numeric(Long), na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# Bind geometry to our modeled matrices
+map_data_r2 <- matrix_data_r2 %>% left_join(reef_coords, by = "ReefName")
+map_data_field <- matrix_data_field %>% left_join(reef_coords, by = "ReefName")
+
+# 2. Build Tooltips ============================================
+conf_colors <- c(
+  "True Negative (Correctly Closed)" = "green",
+  "False Negative (Missed Outbreak)" = "red",
+  "True Positive (Correctly Kept Open)" = "blue",
+  "False Positive (Ghost Culled)" = "gray"
+)
+
+build_popup <- function(reef, year, edna_val, scar_val, cpue_val, truth, conf_class, method) {
+  paste0(
+    "<b>Reef: ", reef, " (", year, ")</b><br>",
+    "<i>Method: ", method, "</i><hr style='margin:4px 0'>",
+    "<b>eDNA % Positive: </b>", round(edna_val, 1), "%<br>",
+    "<b>Manta Scars: </b>", round(scar_val, 1), "%<br>",
+    "<b>Initial CPUE: </b>", round(cpue_val, 3), " COTS/min<br>",
+    "<hr style='margin:4px 0'>",
+    "Truth Required Culling: <b>", truth, "</b><br>",
+    "Outcome: <b>", conf_class, "</b>"
+  )
+}
+
+# 3. Formulate Background Geo-Layers ============================
+# KML Cull Polygons
+cull_gpkg <- "../data/Eotr_CotsCullSites_2025_11_19_1_58_PM.gpkg"
+if (file.exists(cull_gpkg)) {
+  cull_sites_sf <- sf::st_read(cull_gpkg, quiet = TRUE)
+} else {
+  tmp_kml_dir <- tempfile("kmz_")
+  dir.create(tmp_kml_dir)
+  unzip("../data/Eotr_CotsCullSites_2025_11_19_1_58_PM.kmz", exdir = tmp_kml_dir)
+  kml_layers <- sf::st_layers(file.path(tmp_kml_dir, "doc.kml"))$name
+  cull_sites_sf <- do.call(rbind, lapply(kml_layers, function(l) {
+      sf::st_read(file.path(tmp_kml_dir, "doc.kml"), layer = l, quiet = TRUE)
+  })) |> sf::st_zm(drop = TRUE)
+  sf::st_write(cull_sites_sf, dsn = cull_gpkg, driver = "GPKG", append = FALSE, quiet = TRUE)
+}
+
+unique_years <- sort(unique(map_data_r2$Year))
+max_test_year <- max(unique_years, na.rm=TRUE)
+
+# Manta Tracks (Recent/All)
+manta_tracks <- manta_raw |>
+  mutate(
+      SurveyDate = as.Date(substr(SurveyTime, 1, 10)),
+      ScarsCount = case_when(
+          !is.na(as.numeric(ScarsCount)) ~ as.numeric(ScarsCount),
+          tolower(FeedingScarCountRangeCode) == "a" ~ 0,
+          tolower(FeedingScarCountRangeCode) == "p" ~ 4,
+          tolower(FeedingScarCountRangeCode) == "c" ~ 10,
+          TRUE ~ 0
+      )
+  ) |>
+  filter(SurveyDate >= as.Date(paste0(max_test_year, "-01-01"))) |> # Render only the most recent year's tracks to keep mapping lightweight!
+  filter(!is.na(StartLatitude), !is.na(EndLatitude), !is.na(StartLongitude), !is.na(EndLongitude)) |>
+  rowwise() |>
+  mutate(
+      geometry = sf::st_sfc(sf::st_linestring(matrix(c(as.numeric(StartLongitude), as.numeric(EndLongitude), as.numeric(StartLatitude), as.numeric(EndLatitude)), ncol = 2)))
+  ) |>
+  ungroup() |>
+  sf::st_as_sf(crs = 4326)
+
+pal_manta_scars <- colorNumeric(palette = "RdYlBu", domain = 0:10, reverse = TRUE)
+
+manta_cots_pts <- manta_tracks |> filter(as.numeric(CrownOfThornsStarfishCount) > 0)
+if (nrow(manta_cots_pts) > 0) manta_cots_pts <- sf::st_centroid(manta_cots_pts)
+
+# Raw eDNA sites
+edna_sites <- edna_raw %>%
+  mutate(date_edna = as.Date(Date)) %>%
+  filter(date_edna >= as.Date(paste0(max_test_year, "-01-01"))) |>
+  filter(!is.na(Lat) & !is.na(Long)) |>
+  mutate(Lat = as.numeric(Lat), Long = as.numeric(Long)) |>
+  group_by(Reef = ReefName, Lat, Long) %>%
+  summarise(n = n(), .groups="drop")
+
+site_icons <- awesomeIcons(icon = "flask", iconColor = "white", library = "fa", markerColor = "darkred")
+
+
+# 4. Generate Interactive Map Base =============================
+map <- leaflet(width="100%", height="700px") |>
+  addProviderTiles(providers$Esri.WorldImagery, options = providerTileOptions(maxZoom = 18)) |>
+  setView(lng = 147, lat = -18, zoom = 6)
+
+overlay_groups_list <- c()
+
+# Add Background Asset Layers
+map <- map |>
+  addPolygons(
+      data = cull_sites_sf,
+      color = "#ffffff", weight = 1.0, fillColor = "orange", fillOpacity = 0.3,
+      group = "Background: KML Cull Polygons"
+  ) |>
+  addAwesomeMarkers(
+      data = edna_sites, lng = ~Long, lat = ~Lat, icon = site_icons, popup = ~paste0("eDNA Survey: ", Reef),
+      group = "Background: eDNA Drop Points"
+  ) |>
+  addPolylines(
+        data = manta_tracks, color = ~pal_manta_scars(ScarsCount), weight = 3, opacity = 0.8,
+        popup = ~paste0("Reef: ", ReefLabel, "<br>COTS: ", CrownOfThornsStarfishCount, "<br>Scars: ", ScarsCount),
+        group = "Background: Manta Tows"
+  ) |>
+  addCircleMarkers(
+        data = manta_cots_pts, radius = 4, color = "black", weight = 1, fillColor = "red", fillOpacity = 1,
+        popup = ~paste0("<b>COTS Detected!</b><br>Count: ", CrownOfThornsStarfishCount),
+        group = "Background: Manta Tows (COTS > 0)"
+  )
+
+overlay_groups_list <- c("Background: KML Cull Polygons", "Background: eDNA Drop Points", "Background: Manta Tows", "Background: Manta Tows (COTS > 0)")
+
+# 5. Inject Predictive Layers Loop (by Year) ====================
+unique_years <- sort(unique(map_data_r2$Year))
+
+for (yr in unique_years) {
+  
+  yr_data_r2 <- map_data_r2 %>% filter(Year == yr) %>% filter(!is.na(Lat))
+  yr_data_fd <- map_data_field %>% filter(Year == yr) %>% filter(!is.na(Lat))
+  
+  layer_name_r2 <- paste0(yr, " - Approach B: Integrated eDNA")
+  layer_name_fd <- paste0(yr, " - Approach A: Field Data Only")
+  
+  # Inject Rule 2 Layer
+  if(nrow(yr_data_r2) > 0) {
+      map <- map %>% addCircleMarkers(
+        data = yr_data_r2,
+        lng = ~Long, lat = ~Lat,
+        radius = 11, weight = 2, color = "white", fillOpacity = 0.9,
+        fillColor = ~unname(conf_colors[Confusion_Class_R2]),
+        popup = ~build_popup(ReefName, Year, eDNA_Pct_Positive, Pct_Tows_With_Scars, Initial_CPUE, Truth_Needed, Confusion_Class_R2, "Approach B: Integrated (eDNA < 50, Scars < 15, CPUE < 0.02)"),
+        group = layer_name_r2
+      )
+  }
+  
+  # Inject Field Only Layer
+  if(nrow(yr_data_fd) > 0) {
+      map <- map %>% addCircleMarkers(
+        data = yr_data_fd,
+        lng = ~Long, lat = ~Lat,
+        radius = 8, weight = 2, color = "black", fillOpacity = 0.9,
+        fillColor = ~unname(conf_colors[Confusion_Class_Field]),
+        popup = ~build_popup(ReefName, Year, eDNA_Pct_Positive, Pct_Tows_With_Scars, Initial_CPUE, Truth_Needed, Confusion_Class_Field, "Approach A: Field Only (Scars < 15, CPUE < 0.02)"),
+        group = layer_name_fd
+      )
+  }
+  
+  overlay_groups_list <- c(overlay_groups_list, layer_name_r2, layer_name_fd)
+}
+
+# 6. Final Control & Assembly ===================================
+map <- map |> 
+  addLegend(
+      position = "bottomright",
+      colors = unname(conf_colors),
+      labels = names(conf_colors),
+      title = "Validation Outcome",
+      opacity = 1
+  ) %>%
+  addLayersControl(
+      overlayGroups = overlay_groups_list,
+      options = layersControlOptions(collapsed = FALSE)
+  ) %>%
+  hideGroup(overlay_groups_list) %>%
+  showGroup(c("Background: KML Cull Polygons", paste0(max(unique_years), " - Approach B: Integrated eDNA")))
+
+map
+```
