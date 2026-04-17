@@ -16,6 +16,9 @@ execute:
 
 ```{r setup}
 library(dplyr)
+# Robustly find reefDNA regardless of render context
+pkg_path <- if(dir.exists("reefDNA")) "reefDNA" else if(dir.exists("../reefDNA")) "../reefDNA" else "."
+devtools::load_all(pkg_path)
 library(knitr)
 library(ggplot2)
 library(scales)
@@ -464,18 +467,6 @@ conf_colors <- c(
     "False Positive (Ghost Culled)" = "gray"
 )
 
-build_popup <- function(reef, year, edna_val, scar_val, cpue_val, truth, conf_class, method) {
-    paste0(
-        "<b>Reef: ", reef, " (", year, ")</b><br>",
-        "<i>Method: ", method, "</i><hr style='margin:4px 0'>",
-        "<b>eDNA % Positive: </b>", round(edna_val, 1), "%<br>",
-        "<b>Manta Scars: </b>", round(scar_val, 1), "%<br>",
-        "<b>Initial CPUE: </b>", round(cpue_val, 3), " COTS/min<br>",
-        "<hr style='margin:4px 0'>",
-        "Truth Required Culling: <b>", truth, "</b><br>",
-        "Outcome: <b>", conf_class, "</b>"
-    )
-}
 
 # 3. Formulate Background Geo-Layers ============================
 # KML Cull Polygons
@@ -558,37 +549,21 @@ manta_cots_pts <- manta_tracks |> filter(as.numeric(CrownOfThornsStarfishCount) 
 if (nrow(manta_cots_pts) > 0) manta_cots_pts <- sf::st_centroid(manta_cots_pts)
 
 # Dynamic eDNA internal threshold compute matching the actual analysis limits
-best_pair <- function(df, cpue_thr) {
-    actual <- df$Initial_CPUE >= cpue_thr
-    perc_grid <- seq(0, 100, by = 5)
-    conc_grid_t <- seq(min(df$conc_t, na.rm = TRUE), quantile(df$conc_t, 0.99, na.rm = TRUE), length.out = 30)
-    P <- length(perc_grid)
-    C <- length(conc_grid_t)
-    perc_ge <- outer(df$eDNA_Pct_Positive, perc_grid, `>=`)
-    conc_ge <- outer(df$conc_t, conc_grid_t, `>=`)
-    f1_mat <- matrix(NA_real_, nrow = P, ncol = C)
-    for (pi in seq_len(P)) {
-        pred_mat <- conc_ge & perc_ge[, pi]
-        TP <- colSums(pred_mat & actual)
-        FP <- colSums(pred_mat & !actual)
-        FN <- colSums(!pred_mat & actual)
-        prec <- TP / (TP + FP + 1e-9)
-        rec <- TP / (TP + FN + 1e-9)
-        f1_mat[pi, ] <- 2 * prec * rec / (prec + rec + 1e-9)
-    }
-    max_f1 <- max(f1_mat, na.rm = TRUE)
-    idx <- which(f1_mat == max_f1, arr.ind = TRUE)
-    idx <- idx[order(idx[, 1], idx[, 2], decreasing = TRUE), , drop = FALSE][1, ]
-    list(perc_star = perc_grid[idx[1]], conc_t_star = conc_grid_t[idx[2]])
-}
 
 cb_calc <- combined_data %>%
     filter(!is.na(eDNA_Pct_Positive), !is.na(eDNA_Mean_Conc), !is.na(Initial_CPUE)) %>%
-    mutate(conc_t = log1p(eDNA_Mean_Conc))
+    mutate(
+        conc_t = log1p(eDNA_Mean_Conc),
+        cpue = Initial_CPUE,
+        perc_pos = eDNA_Pct_Positive
+    )
 
-thr_01 <- best_pair(cb_calc, 0.01)
-thr_04 <- best_pair(cb_calc, 0.04)
-thr_08 <- best_pair(cb_calc, 0.08)
+perc_grid <- seq(0, 100, by = 5)
+conc_grid_t <- seq(min(cb_calc$conc_t, na.rm = TRUE), quantile(cb_calc$conc_t, 0.99, na.rm = TRUE), length.out = 30)
+
+thr_01 <- best_pair(cb_calc, 0.01, perc_grid, conc_grid_t)
+thr_04 <- best_pair(cb_calc, 0.04, perc_grid, conc_grid_t)
+thr_08 <- best_pair(cb_calc, 0.08, perc_grid, conc_grid_t)
 
 # Raw eDNA sites
 edna_sites <- edna_raw %>%

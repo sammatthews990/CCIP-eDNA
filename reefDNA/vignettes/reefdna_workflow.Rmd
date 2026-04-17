@@ -1,0 +1,111 @@
+---
+title: "From Water Samples to Management Decisions"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{From Water Samples to Management Decisions}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+## Module 1: Introduction and Operational Context
+
+Environmental DNA (eDNA) provides a scalable and cost-effective monitoring methodology for detecting Crown-of-Thorns Starfish (COTS) populations. By identifying molecular signals associated with COTS presence, marine managers can prioritize site visits prior to deploying labor-intensive dive teams. 
+
+The interpretation of eDNA signals depends on correlation with Catch Per Unit Effort (CPUE), which serves as the primary "ground truth" metric for validating starfish density. Modern COTS management on the Great Barrier Reef faces the challenge of "Ghost Culling"—an operational scenario where significant vessel and personnel resources are deployed to reefs that do not possess starfish densities warranting intervention. The `reefDNA` package provides a standardized framework for integrating molecular and field-based survey data to optimize these resource allocations and maximize the return on management investment.
+
+## Module 2: Data Standardization
+
+The analysis of COTS populations involves multifaceted data streams, including manual cull logs, broad-scale manta tow observations, and quantitative PCR (qPCR) results from seawater samples. Each stream follows distinct reporting standards and spatial granularities.
+
+The `reefDNA` package provides ingestion functions specifically designed to handle these Great Barrier Reef standard formats. For this vignette, we utilize a bundled subset of operational data representing five key reefs to demonstrate a standardized analytical pipeline.
+
+### Data Ingestion and Cleaning
+
+The package utilizes `inst/extdata` to provide example datasets. The following code demonstrates the ingestion of cull, manta, and eDNA data streams.
+
+```{r setup, eval=TRUE}
+library(reefDNA)
+library(dplyr)
+library(readxl)
+
+# Path resolution for package-bundled datasets
+cull_path  <- system.file("extdata", "cull_sub.xlsx", package = "reefDNA")
+manta_path <- system.file("extdata", "manta_sub.csv", package = "reefDNA")
+edna_path  <- system.file("extdata", "edna_sub.xlsx", package = "reefDNA")
+
+# 1. Cull Data Preparation
+# Processes raw Excel records, renames cohorts, and calculates site-level CPUE.
+cull <- prepare_cull_data(cull_path)
+
+# 2. Manta Tow Data Preparation
+# Cleans visual survey records and extracts feeding scar categories.
+manta <- prepare_manta_data(manta_path)
+
+# 3. eDNA Data Aggregation
+# Ingests raw qPCR results and aggregates them into survey events.
+edna_raw <- read_excel(edna_path, sheet = "eDNA_data_ALL")
+edna_agg <- process_edna_events(edna_raw)
+
+# Overview of summarized eDNA events
+head(edna_agg, 3)
+```
+
+## Module 3: Signal Calibration via Temporal Joining
+
+Trace biological signals, including eDNA, degrade over time due to UV exposure, microbial activity, and oceanic dispersal. To validate the predictive capability of eDNA, it is necessary to align molecular signals with physical survey outcomes that are proximate in time.
+
+`reefDNA` implements a "Fuzzy Temporal Joining" algorithm. This methodology binds eDNA survey events with subsequent cull operations occurring within a user-defined window (typically $\pm 183$ days). By matching a past eDNA "signal" to a future physical "truth," we can calibrate the minimum thresholds required to trigger a management response.
+
+```{r join-temporal, eval=TRUE}
+# Aligning eDNA signals with physical surveys within a 6-month prediction window.
+# The 'get_prior_cohort' function ensures signals occurring after the culls are excluded.
+reef_calibration <- get_prior_cohort(
+    culls    = cull, 
+    ednas    = edna_agg, 
+    win_days = 183, 
+    label    = "6-Month Horizon"
+)
+
+# Display the resulting temporal matches
+head(reef_calibration, 3)
+```
+
+## Module 4: Spatial Context and Radial Buffer Analysis
+
+Management efficiency is improved when predictions can be made at the site level rather than the reef level. While a reef-scale aggregation provides a broad overview, it often masks high-density localized clusters that require immediate culling.
+
+The `reefDNA` package allows for spatial verification using radial buffers around eDNA markers. By defining buffers of 200m, 500m, 1km, and 2km, analysts can determine the spatial decay of the eDNA signal and identify the precise radius within which eDNA concentration best predicts diver-observed CPUE.
+
+```{r spatial, eval=FALSE}
+# Calculate site-level performance metrics based on geographic proximity.
+# This requires individual eDNA site coordinates joined to cull data.
+results_500m <- evaluate_unified_spatial(
+    cull         = cull, 
+    edna_sites   = edna_sites_spatial, 
+    radius_m     = 500, 
+    cpue_thresh  = 0.04
+)
+```
+
+## Module 5: Predictive Calibration and Management Metrics
+
+The final stage of the workflow involves translating statistical correlations into operational metrics, specifically the Expected Return on Investment (eROI). By modeling the relationship between molecular concentrations and starfish density using Generalized Linear Mixed Models (GLMMs), `reefDNA` supports the development of actionable decision thresholds.
+
+### 2D Optimization and Decision Support
+
+Analysts utilize the `best_pair()` function to identify the optimal combination of "Percent Positive" samples and "Molecular Concentration" that maximizes the detection of outbreaks while minimizing "Ghost Culls." These thresholds establish the boundary over which a reef should transition from monitoring to active control.
+
+| Target CPUE Threshold | Percent eDNA Positive | Log-Concentration Threshold | Mean Copies/rxn Limit |
+|:----------------------|:----------------------|:----------------------------|:----------------------|
+| **0.01 (Low)**        | 40%                   | 2.00                        | 6.38                  |
+| **0.04 (Actionable)** | 50%                   | 2.40                        | 10.00                 |
+| **0.08 (High)**       | 80%                   | 3.20                        | 23.40                 |
+
+By integrating these thresholds, the `reefDNA` framework allows managers to calculate the volume of diver hours preserved through eDNA-informed reef closures, ensuring that limited resources are target toward the reefs with the highest probability of an ongoing outbreak.

@@ -1,4 +1,6 @@
 library(dplyr)
+pkg_path <- if(dir.exists("reefDNA")) "reefDNA" else if(dir.exists("../reefDNA")) "../reefDNA" else "."
+devtools::load_all(pkg_path)
 library(ggplot2)
 library(readxl)
 library(fuzzyjoin)
@@ -17,81 +19,10 @@ library(scales)
 # Setup a clean plotting theme
 theme_set(theme_bw() + theme(panel.grid.minor = element_blank()))
 # Formatting labels for linear models
-lm_label <- function(model, digits_r2 = 2, digits_p = 3, digits_rmse = 2) {
-    g <- glance(model)
-    r2 <- g$r.squared
-    p <- g$p.value
-    if (is.na(p)) {
-        fs <- summary(model)$fstatistic
-        p <- pf(fs[1], fs[2], fs[3], lower.tail = FALSE)
-    }
-    rmse <- sqrt(mean(residuals(model)^2))
-    p_txt <- if (p < 0.001) "< 0.001" else formatC(p, format = "f", digits = digits_p)
-    sprintf(paste0("R^2 = %.", digits_r2, "f\n", "p = %s\n", "RMSE = %.", digits_rmse, "f"), r2, p_txt, rmse)
-}
 
 # Confusion matrices and Evaluation Metrics
-make_confusion <- function(dat, perc_thresh, cpue_thresh) {
-    classified <- dat %>%
-        mutate(
-            pred   = if_else(perc_pos >= perc_thresh, "Pred +", "Pred -"),
-            actual = if_else(cpue >= cpue_thresh, "Actual +", "Actual -")
-        )
 
-    cm <- classified %>%
-        count(actual, pred, .drop = FALSE) %>%
-        complete(
-            actual = c("Actual +", "Actual -"),
-            pred = c("Pred +", "Pred -"),
-            fill = list(n = 0)
-        ) %>%
-        group_by(actual) %>%
-        mutate(row_prop = n / sum(n)) %>%
-        ungroup() %>%
-        mutate(label = paste0(n, "\n", scales::percent(row_prop, accuracy = 0.1)))
 
-    TP <- cm$n[cm$actual == "Actual +" & cm$pred == "Pred +"]
-    FP <- cm$n[cm$actual == "Actual -" & cm$pred == "Pred +"]
-    TN <- cm$n[cm$actual == "Actual -" & cm$pred == "Pred -"]
-    FN <- cm$n[cm$actual == "Actual +" & cm$pred == "Pred -"]
-
-    acc <- (TP + TN) / (TP + TN + FP + FN + 1e-9)
-    sens <- TP / (TP + FN + 1e-9) # Recall / TPR
-    spec <- TN / (TN + FP + 1e-9)
-    prec <- TP / (TP + FP + 1e-9) # PPV
-    f1 <- 2 * prec * sens / (prec + sens + 1e-9)
-
-    list(
-        cm = cm,
-        metrics = tibble(
-            perc_thresh = perc_thresh, cpue_thresh = cpue_thresh, Accuracy = acc,
-            Sensitivity_TPR = sens, Specificity_TNR = spec, Precision_PPV = prec, F1 = f1
-        )
-    )
-}
-
-plot_confusion <- function(cm_obj, title = "Confusion matrix") {
-    ggplot(cm_obj$cm, aes(x = pred, y = actual, fill = row_prop)) +
-        geom_tile(color = "grey85", linewidth = 0.4) +
-        geom_text(aes(label = label), size = 5) +
-        scale_fill_viridis_c(option = "mako", direction = -1, begin = 0.25, name = "Count Rate") +
-        labs(x = "Prediction from eDNA (% pos)", y = "Ground truth from CPUE", title = title) +
-        coord_fixed()
-}
-
-metrics_for <- function(p_thr, c_thr, x) {
-    pred <- x$perc_pos >= p_thr
-    actual <- x$cpue >= c_thr
-    TP <- sum(pred & actual)
-    FP <- sum(pred & !actual)
-    TN <- sum(!pred & !actual)
-    FN <- sum(!pred & actual)
-    prec <- TP / (TP + FP + 1e-9)
-    rec <- TP / (TP + FN + 1e-9)
-    f1 <- 2 * prec * rec / (prec + rec + 1e-9)
-    acc <- (TP + TN) / (TP + TN + FP + FN + 1e-9)
-    c(F1 = f1, Accuracy = acc, Precision = prec, Recall = rec)
-}
 # Load Cull data
 cull.dat <- read_excel("data/260201_COTS-Cull-Data-Ewels.xlsx", sheet = "Cull")
 
@@ -158,32 +89,6 @@ reef_any <- same6_any %>%
         n_matches       = n(),
         .groups         = "drop"
     )
-get_prior_cohort <- function(culls, ednas, win_days, label) {
-    res <- fuzzy_inner_join(
-        culls, ednas,
-        by = c("Reef" = "Reef", "date_cull" = "date_edna"),
-        match_fun = list(
-            `==`,
-            function(cull_date, edna_date) {
-                diff <- as.numeric(cull_date - edna_date)
-                diff >= 0 & diff <= win_days
-            }
-        )
-    ) %>% mutate(diff_days = as.numeric(date_cull - date_edna), Reef = Reef.x)
-
-    res %>%
-        group_by(Reef, Collection.org, Year, grp) %>%
-        summarise(
-            horizon         = label,
-            total_cots      = sum(Cohort1 + Cohort2 + Cohort3 + Cohort4, na.rm = TRUE),
-            total_bottom    = sum(Bottomtime, na.rm = TRUE),
-            cpue_reef       = total_cots / total_bottom,
-            perc_pos_reef   = mean(perc_pos, na.rm = TRUE),
-            conc_mean_reef  = mean(conc_mean, na.rm = TRUE),
-            n_matches       = n(),
-            .groups         = "drop"
-        )
-}
 
 reef_prior_3m <- get_prior_cohort(cull, edna_agg, 91, "3 Months")
 reef_prior_6m <- get_prior_cohort(cull, edna_agg, 183, "6 Months")
@@ -221,37 +126,9 @@ dat_glmm <- reef_before %>%
     droplevels()
 
 effort_ref <- median(dat_glmm$total_bottom, na.rm = TRUE)
-fit_horizon_glmm <- function(hor_val) {
-    dat_sub <- dat_glmm %>% filter(horizon == hor_val)
-    if (nrow(dat_sub) == 0) {
-        return(NULL)
-    }
-
-    m_nb <- glmmTMB(
-        total_cots ~ perc_pos_reef + offset(log(total_bottom)) + (1 | Reef),
-        family = nbinom2(),
-        data = dat_sub,
-        control = glmmTMBControl(optCtrl = list(iter.max = 1e3, eval.max = 1e3))
-    )
-
-    nd <- tibble(
-        perc_pos_reef = seq(min(dat_sub$perc_pos_reef), max(dat_sub$perc_pos_reef), length.out = 100),
-        total_bottom = median(dat_sub$total_bottom, na.rm = TRUE),
-        Reef = NA,
-        horizon = hor_val
-    )
-
-    pred <- predict(m_nb, newdata = nd, type = "link", se.fit = TRUE, re.form = NA)
-    nd %>%
-        mutate(
-            fit_cpue  = exp(pred$fit) / total_bottom,
-            lcl_cpue  = exp(pred$fit - 1.96 * pred$se.fit) / total_bottom,
-            ucl_cpue  = exp(pred$fit + 1.96 * pred$se.fit) / total_bottom
-        )
-}
 
 horizons <- levels(dat_glmm$horizon)
-nd_all <- map_dfr(horizons, fit_horizon_glmm) %>%
+nd_all <- map_dfr(horizons, ~ fit_horizon_glmm(.x, dat_glmm)) %>%
     mutate(horizon = factor(horizon, levels = horizons))
 
 ggplot(dat_glmm, aes(x = perc_pos_reef, y = obs_cpue)) +
@@ -350,58 +227,6 @@ k <- 5
 R <- 100 # Reduced from 200 for rendering speed
 set.seed(1)
 
-run_cv_for_cpue <- function(dat_evt, cpue_thr, perc_grid, k = 5, R = 100) {
-    dat2 <- dat_evt %>% mutate(actual = if (cpue_thr == 0) (cpue > 0) else (cpue >= cpue_thr))
-    strat_ok <- length(unique(dat2$actual)) > 1
-    folds <- if (strat_ok) vfold_cv(dat2, v = k, repeats = R, strata = actual) else vfold_cv(dat2, v = k, repeats = R)
-
-    cv_long <- folds %>%
-        mutate(assess = map(splits, assessment)) %>%
-        dplyr::select(id, id2, assess) %>%
-        tidyr::expand_grid(perc_thresh = perc_grid) %>%
-        mutate(
-            out = pmap(list(perc_thresh, assess), \(p, d) metrics_for(p, cpue_thr, d)),
-            F1 = vapply(out, `[[`, numeric(1), "F1"),
-            Accuracy = vapply(out, `[[`, numeric(1), "Accuracy"),
-            Precision = vapply(out, `[[`, numeric(1), "Precision"),
-            Recall = vapply(out, `[[`, numeric(1), "Recall")
-        ) %>%
-        dplyr::select(-out, -assess)
-
-    cv_sum <- cv_long %>%
-        group_by(perc_thresh) %>%
-        summarise(
-            F1_mean = mean(F1, na.rm = TRUE), F1_sd = sd(F1, na.rm = TRUE), F1_se = F1_sd / sqrt(n()), .groups = "drop"
-        )
-
-    best <- cv_sum %>% slice_max(F1_mean, n = 1, with_ties = FALSE)
-    p_star <- best$perc_thresh
-
-    perf_split <- folds %>%
-        mutate(
-            assess = map(splits, assessment),
-            m = map(assess, ~ {
-                out <- metrics_for(p_star, cpue_thr, .x)
-                tibble(F1 = out["F1"], Accuracy = out["Accuracy"], Precision = out["Precision"], Recall = out["Recall"])
-            })
-        ) %>%
-        dplyr::select(m) %>%
-        unnest(m)
-
-    perf_sum <- perf_split %>%
-        summarise(
-            cpue_thr = cpue_thr, perc_star = p_star,
-            F1_mean = mean(F1), F1_sd = sd(F1), F1_se = F1_sd / sqrt(n()),
-            Acc_mean = mean(Accuracy), Acc_sd = sd(Accuracy), Acc_se = Acc_sd / sqrt(n()),
-            Prec_mean = mean(Precision), Prec_sd = sd(Precision), Prec_se = Prec_sd / sqrt(n()),
-            Rec_mean = mean(Recall), Rec_sd = sd(Recall), Rec_se = Rec_sd / sqrt(n()),
-            .groups = "drop"
-        )
-
-    cm_full <- make_confusion(dat2 %>% dplyr::select(perc_pos, cpue), p_star, cpue_thr)
-
-    list(cpue_thr = cpue_thr, perc_star = p_star, cv_sum = cv_sum, perf_sum = perf_sum, cm_full = cm_full)
-}
 
 results <- map(cpue_levels, ~ run_cv_for_cpue(dat_evt, .x, perc_grid, k = k, R = R))
 
@@ -449,13 +274,6 @@ dat_evt_hor <- dat_glmm %>%
     ) %>%
     dplyr::select(reef, Collection.org, perc_pos, cpue, horizon)
 
-run_cv_for_horizon <- function(dat_full, hor_val, cpue_thr, perc_grid, k = 5, R = 100) {
-    dat_sub <- dat_full %>% filter(horizon == hor_val)
-    res <- run_cv_for_cpue(dat_sub, cpue_thr, perc_grid, k = k, R = R)
-    res$perf_sum <- res$perf_sum %>% mutate(horizon = hor_val)
-    res$cm_full$cm <- res$cm_full$cm %>% mutate(horizon = hor_val)
-    res
-}
 
 horizons <- levels(dat_evt_hor$horizon)
 results_hor <- map(horizons, ~ run_cv_for_horizon(dat_evt_hor, .x, cpue_target, perc_grid, k = k, R = R))
@@ -484,24 +302,6 @@ p_cm_hor <- ggplot(cm_all_hor, aes(x = pred, y = actual, fill = row_prop)) +
     coord_fixed()
 
 p_cm_hor
-metrics_for_both <- function(p_thr, c_thr, cpue_thr, rule = c("or", "and"), x) {
-    rule <- match.arg(rule)
-    pred <- if (rule == "or") {
-        (x$perc_pos >= p_thr) | (x$conc_t >= c_thr)
-    } else {
-        (x$perc_pos >= p_thr) & (x$conc_t >= c_thr)
-    }
-    actual <- x$cpue >= cpue_thr
-    TP <- sum(pred & actual)
-    FP <- sum(pred & !actual)
-    TN <- sum(!pred & !actual)
-    FN <- sum(!pred & actual)
-    prec <- TP / (TP + FP + 1e-9)
-    rec <- TP / (TP + FN + 1e-9)
-    f1 <- 2 * prec * rec / (prec + rec + 1e-9)
-    acc <- (TP + TN) / (TP + TN + FP + FN + 1e-9)
-    c(F1 = f1, Accuracy = acc, Precision = prec, Recall = rec)
-}
 
 # Tune on transformed concentration to avoid skewness clustering 0s all the way across
 conc_t_max <- quantile(dat_evt$conc_t, 0.99, na.rm = TRUE)
@@ -525,58 +325,6 @@ p_2dhm <- ggplot(grid_both_and, aes(x = perc_thresh, y = expm1(conc_thresh_t), f
 
 
 # Full 2D Loop over CPUE levels
-run_cv_2d <- function(dat, cpue_thr, perc_grid, conc_grid_t, rule = "and") {
-    best_pair <- function(df, cpue_thr) {
-        actual <- df$cpue >= cpue_thr
-        P <- length(perc_grid)
-        C <- length(conc_grid_t)
-        perc_ge <- outer(df$perc_pos, perc_grid, `>=`)
-        conc_ge <- outer(df$conc_t, conc_grid_t, `>=`)
-        f1_mat <- matrix(NA_real_, nrow = P, ncol = C)
-        for (pi in seq_len(P)) {
-            pred_mat <- if (rule == "and") conc_ge & perc_ge[, pi] else conc_ge | perc_ge[, pi]
-            TP <- colSums(pred_mat & actual)
-            FP <- colSums(pred_mat & !actual)
-            FN <- colSums(!pred_mat & actual)
-            prec <- TP / (TP + FP + 1e-9)
-            rec <- TP / (TP + FN + 1e-9)
-            f1_mat[pi, ] <- 2 * prec * rec / (prec + rec + 1e-9)
-        }
-        max_f1 <- max(f1_mat, na.rm = TRUE)
-        idx <- which(f1_mat == max_f1, arr.ind = TRUE)
-        idx <- idx[order(idx[, 1], idx[, 2], decreasing = TRUE), , drop = FALSE][1, ]
-        list(perc_star = perc_grid[idx[1]], conc_t_star = conc_grid_t[idx[2]])
-    }
-
-    dat2 <- dat %>% mutate(actual = cpue >= cpue_thr)
-    if (length(unique(dat2$actual)) < 2) {
-        return(NULL)
-    }
-
-    folds <- vfold_cv(dat2, v = k, repeats = R, strata = actual)
-
-    split_res <- map_dfr(folds$splits, function(spl) {
-        tr <- analysis(spl)
-        te <- assessment(spl)
-        best <- best_pair(tr, cpue_thr)
-        met <- metrics_for_both(best$perc_star, best$conc_t_star, cpue_thr, rule, te)
-        tibble(perc_star = best$perc_star, conc_t_star = best$conc_t_star, conc_mean_star = pmax(expm1(best$conc_t_star), 0)) %>%
-            bind_cols(tibble(F1 = met["F1"], Accuracy = met["Accuracy"], Precision = met["Precision"], Recall = met["Recall"]))
-    })
-
-    thr <- split_res %>% summarise(perc_star = median(perc_star), conc_t_star = median(conc_t_star), conc_mean_star = median(conc_mean_star), .groups = "drop")
-
-    perf <- split_res %>%
-        summarise(
-            cpue_thr = cpue_thr, perc_star = thr$perc_star, conc_mean_star = thr$conc_mean_star,
-            F1_mean = mean(F1), F1_se = sd(F1) / sqrt(n()),
-            Acc_mean = mean(Accuracy), Acc_se = sd(Accuracy) / sqrt(n()),
-            Prec_mean = mean(Precision), Prec_se = sd(Precision) / sqrt(n()),
-            Rec_mean = mean(Recall), Rec_se = sd(Recall) / sqrt(n()), .groups = "drop"
-        )
-
-    list(thr = thr, perf = perf)
-}
 
 results_2d <- map(cpue_levels, ~ run_cv_2d(dat_evt, .x, seq(0, 100, by = 5), conc_grid_t, rule = "and")) # %>% discard(is.null)
 
@@ -593,21 +341,6 @@ summary_table_2d <- map_dfr(results_2d, "perf") %>%
 summary_table_2d
 
 # Plot 2D Multi-CM
-make_confusion_2d <- function(dat, perc_star, conc_t_star, cpue_thr, rule = "and") {
-    classified <- dat %>%
-        mutate(
-            pred = if_else(perc_pos >= perc_star & conc_t >= conc_t_star, "Pred +", "Pred -"),
-            actual = if_else(cpue >= cpue_thr, "Actual +", "Actual -")
-        )
-    cm <- classified %>%
-        count(actual, pred, .drop = FALSE) %>%
-        complete(actual = c("Actual +", "Actual -"), pred = c("Pred +", "Pred -"), fill = list(n = 0)) %>%
-        group_by(actual) %>%
-        mutate(row_prop = n / sum(n)) %>%
-        ungroup() %>%
-        mutate(label = paste0(n, "\n", scales::percent(row_prop, accuracy = 0.1)))
-    list(cm = cm)
-}
 
 thr_df <- map_dfr(results_2d, "thr") %>% mutate(cpue_thr = sapply(results_2d, function(x) x$perf$cpue_thr))
 cm_all_2d <- pmap_dfr(list(thr_df$cpue_thr, thr_df$perc_star, thr_df$conc_t_star), function(cp, p, c) {
@@ -703,56 +436,62 @@ for (dist_m in buffer_radii) {
 df_spatial <- bind_rows(spatial_results) %>%
     mutate(radius = factor(radius, levels = paste0(buffer_radii, "m Radius")))
 
-# Run CV Threshold tuning evaluating spatial density bounds (Evaluate 0.04 CPUE Target)
-run_spatial_cv <- function(dat_sub, cpue_val, r_label, reg_label) {
-    if (nrow(dat_sub) < 5) {
-        return(NULL)
-    } # Skip if empty constraints
+# Run CV Threshold tuning evaluating spatial density bounds 
+# We evaluate both 0.04 and 0.02 CPUE Targets, using unified global thresholds per radius.
 
-    res <- run_cv_for_cpue(dat_sub, cpue_val, perc_grid, k = 5, R = 50)
-    res$cm_full$cm <- res$cm_full$cm %>% mutate(radius = r_label, regime = reg_label)
-    res
+res_04 <- evaluate_unified_spatial(df_spatial, 0.04)
+if (!is.null(res_04)) {
+    p_spatial_04 <- res_04$p
+    print(p_spatial_04)
 }
 
-spatial_cms <- list()
-for (r in levels(df_spatial$radius)) {
-    for (reg in unique(df_spatial$regime)) {
-        sub_df <- df_spatial %>% filter(radius == r, regime == reg)
-        out <- run_spatial_cv(sub_df, 0.04, r, reg)
-        if (!is.null(out)) {
-            spatial_cms[[paste0(r, "_", reg)]] <- out$cm_full$cm %>% mutate(cpue_thr = 0.04, perc_star = out$perc_star)
-        }
-    }
+res_02 <- evaluate_unified_spatial(df_spatial, 0.02)
+if (!is.null(res_02)) {
+    p_spatial_02 <- res_02$p
+    print(p_spatial_02)
 }
+metrics_list <- list()
+if (exists("res_04") && !is.null(res_04)) metrics_list[["0.04"]] <- res_04$cm
+if (exists("res_02") && !is.null(res_02)) metrics_list[["0.02"]] <- res_02$cm
 
-if (length(spatial_cms) > 0) {
-    df_spatial_cm <- bind_rows(spatial_cms) %>%
+if (length(metrics_list) > 0) {
+    df_metrics <- bind_rows(metrics_list, .id = "CPUE") %>%
+        mutate(class = case_when(
+            pred == "Pred +" & actual == "Actual +" ~ "TP",
+            pred == "Pred +" & actual == "Actual -" ~ "FP",
+            pred == "Pred -" & actual == "Actual +" ~ "FN",
+            pred == "Pred -" & actual == "Actual -" ~ "TN"
+        )) %>%
+        dplyr::select(CPUE, radius, regime, perc_star, class, n) %>%
+        pivot_wider(names_from = class, values_from = n, values_fill = list(n = 0)) %>%
         mutate(
-            panel = paste0(regime, "\n", radius, "\n%pos* = ", perc_star)
+            TPR = TP / (TP + FN + 1e-9),
+            Sensitivity = TPR,
+            FPR = FP / (FP + TN + 1e-9),
+            Precision = TP / (TP + FP + 1e-9),
+            F1 = 2 * (Precision * TPR) / (Precision + TPR + 1e-9)
+        ) %>%
+        arrange(CPUE, radius, regime) %>%
+        dplyr::select(
+            CPUE, Radius = radius, Regime = regime, `% Pos Target` = perc_star, 
+            TPR, FPR, Sensitivity, Precision, F1
         )
-
-    p_spatial <- ggplot(df_spatial_cm, aes(x = pred, y = actual, fill = row_prop)) +
-        geom_tile(color = "grey85", linewidth = 0.4) +
-        geom_text(aes(label = label), size = 3, color = "black") +
-        facet_wrap(~panel, ncol = 4) +
-        scale_fill_viridis_c(option = "mako", direction = -1, begin = 0.25, limits = c(0, 1), name = "Row Rate") +
-        labs(
-            x = "Prediction from eDNA (% pos)",
-            y = "Ground truth from explicit Local Site CPUE",
-            title = "Site-Level Confusion Matrices across Radial Buffers and Sampling Regimes (CPUE ≥ 0.04)"
-        ) +
-        coord_fixed()
-
-    print(p_spatial)
+        
+    # Expose the formatted statistics natively inside the rendered workflow
+    df_metrics %>%
+        mutate(across(c(TPR, FPR, Sensitivity, Precision, F1), ~ round(.x, 3))) %>%
+        knitr::kable(caption = "Site-Level Performance Statistics bounded by Spatial Extents & Regimes")
 }
 
 
 # Safely load ggplot and export defined variables
 library(ggplot2)
-dir.create("plots", showWarnings = FALSE)
-if (exists("p_hm")) ggsave("plots/temporal_degradation_GLM.png", plot = p_hm, width = 10, height = 8, dpi = 300)
-if (exists("p_cm")) ggsave("plots/multi_horizon_CPUE.png", plot = p_cm, width = 10, height = 8, dpi = 300)
-if (exists("p_cm_hor")) ggsave("plots/cv_horizons_02_CPUE.png", plot = p_cm_hor, width = 10, height = 4, dpi = 300)
-if (exists("p_2dhm")) ggsave("plots/2D_AND_F1_Heatmap.png", plot = p_2dhm, width = 10, height = 8, dpi = 300)
-if (exists("p_2dcm")) ggsave("plots/2D_AND_Multi_CM.png", plot = p_2dcm, width = 10, height = 8, dpi = 300)
-if (exists("p_spatial")) ggsave("plots/spatial_buffer_CM.png", plot = p_spatial, width = 12, height = 8, dpi = 300)
+dir.create("plots", showWarnings=FALSE)
+if(exists("p_hm")) ggsave("plots/temporal_degradation_GLM.png", plot = p_hm, width=10, height=8, dpi=300)
+if(exists("p_cm")) ggsave("plots/multi_horizon_CPUE.png", plot = p_cm, width=10, height=8, dpi=300)
+if(exists("p_cm_hor")) ggsave("plots/cv_horizons_02_CPUE.png", plot = p_cm_hor, width=10, height=4, dpi=300)
+if(exists("p_2dhm")) ggsave("plots/2D_AND_F1_Heatmap.png", plot = p_2dhm, width=10, height=8, dpi=300)
+if(exists("p_2dcm")) ggsave("plots/2D_AND_Multi_CM.png", plot = p_2dcm, width=10, height=8, dpi=300)
+if(exists("p_spatial_04")) ggsave("plots/spatial_buffer_CM_04.png", plot = p_spatial_04, width=12, height=8, dpi=300)
+if(exists("p_spatial_02")) ggsave("plots/spatial_buffer_CM_02.png", plot = p_spatial_02, width=12, height=8, dpi=300)
+if(exists("df_metrics")) write.csv(df_metrics, "plots/spatial_metrics.csv", row.names=FALSE)

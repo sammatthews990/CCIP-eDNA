@@ -1,0 +1,1496 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.7.25">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="Sam Matthews">
+<meta name="dcterms.date" content="2026-04-16">
+
+<title>eDNA CPUE Comparison</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="eDNA_CPUE_Comparison_pkg_files/libs/clipboard/clipboard.min.js"></script>
+<script src="eDNA_CPUE_Comparison_pkg_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="eDNA_CPUE_Comparison_pkg_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="eDNA_CPUE_Comparison_pkg_files/libs/quarto-html/popper.min.js"></script>
+<script src="eDNA_CPUE_Comparison_pkg_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="eDNA_CPUE_Comparison_pkg_files/libs/quarto-html/anchor.min.js"></script>
+<link href="eDNA_CPUE_Comparison_pkg_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="eDNA_CPUE_Comparison_pkg_files/libs/quarto-html/quarto-syntax-highlighting-fe31d7bd2deb2a321418d01dba375a64.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="eDNA_CPUE_Comparison_pkg_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="eDNA_CPUE_Comparison_pkg_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="eDNA_CPUE_Comparison_pkg_files/libs/bootstrap/bootstrap-813c323200a87c37e262811031999de4.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+
+
+</head>
+
+<body class="quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#setup-and-global-functions" id="toc-setup-and-global-functions" class="nav-link active" data-scroll-target="#setup-and-global-functions">1. Setup and Global Functions</a></li>
+  <li><a href="#data-loading-and-aggregation" id="toc-data-loading-and-aggregation" class="nav-link" data-scroll-target="#data-loading-and-aggregation">2. Data Loading and Aggregation</a></li>
+  <li><a href="#fuzzy-temporal-joining" id="toc-fuzzy-temporal-joining" class="nav-link" data-scroll-target="#fuzzy-temporal-joining">3. Fuzzy Temporal Joining</a>
+  <ul class="collapse">
+  <li><a href="#matches-within-6-months-183-days" id="toc-matches-within-6-months-183-days" class="nav-link" data-scroll-target="#matches-within-6-months-183-days">3.1 Matches within ± 6 months (183 days)</a></li>
+  <li><a href="#matches-with-edna-prior-to-cull-3-6-and-12-months" id="toc-matches-with-edna-prior-to-cull-3-6-and-12-months" class="nav-link" data-scroll-target="#matches-with-edna-prior-to-cull-3-6-and-12-months">3.2 Matches with eDNA Prior to Cull (3, 6, and 12 Months)</a></li>
+  </ul></li>
+  <li><a href="#initial-linear-comparisons" id="toc-initial-linear-comparisons" class="nav-link" data-scroll-target="#initial-linear-comparisons">4. Initial Linear Comparisons</a></li>
+  <li><a href="#generalized-linear-mixed-effects-models-glmms" id="toc-generalized-linear-mixed-effects-models-glmms" class="nav-link" data-scroll-target="#generalized-linear-mixed-effects-models-glmms">5. Generalized Linear Mixed-Effects Models (GLMMs)</a>
+  <ul class="collapse">
+  <li><a href="#negative-binomial-positive" id="toc-negative-binomial-positive" class="nav-link" data-scroll-target="#negative-binomial-positive">5.1 Negative Binomial (% Positive)</a></li>
+  <li><a href="#negative-binomial-both-predictors-w-interaction" id="toc-negative-binomial-both-predictors-w-interaction" class="nav-link" data-scroll-target="#negative-binomial-both-predictors-w-interaction">5.2 Negative Binomial (Both Predictors w/ Interaction)</a></li>
+  </ul></li>
+  <li><a href="#generalized-additive-models-gam" id="toc-generalized-additive-models-gam" class="nav-link" data-scroll-target="#generalized-additive-models-gam">6. Generalized Additive Models (GAM)</a></li>
+  <li><a href="#confusion-matrix-decision-modeling" id="toc-confusion-matrix-decision-modeling" class="nav-link" data-scroll-target="#confusion-matrix-decision-modeling">7. Confusion Matrix Decision Modeling</a></li>
+  <li><a href="#threshold-selection-via-cross-validation" id="toc-threshold-selection-via-cross-validation" class="nav-link" data-scroll-target="#threshold-selection-via-cross-validation">8. Threshold Selection via Cross Validation</a>
+  <ul class="collapse">
+  <li><a href="#horizon-specific-thresholding-cpue-0.02" id="toc-horizon-specific-thresholding-cpue-0.02" class="nav-link" data-scroll-target="#horizon-specific-thresholding-cpue-0.02">8.1 Horizon-Specific Thresholding (CPUE ≥ 0.02)</a></li>
+  </ul></li>
+  <li><a href="#multivariate-rule-search" id="toc-multivariate-rule-search" class="nav-link" data-scroll-target="#multivariate-rule-search">9. Multivariate Rule Search</a></li>
+  <li><a href="#site-level-spatial-buffer-analysis" id="toc-site-level-spatial-buffer-analysis" class="nav-link" data-scroll-target="#site-level-spatial-buffer-analysis">10. Site-Level Spatial Buffer Analysis</a>
+  <ul class="collapse">
+  <li><a href="#interpretation-of-spatial-validation-metrics" id="toc-interpretation-of-spatial-validation-metrics" class="nav-link" data-scroll-target="#interpretation-of-spatial-validation-metrics">Interpretation of Spatial Validation Metrics</a></li>
+  </ul></li>
+  </ul>
+</nav>
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">eDNA CPUE Comparison</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>Sam Matthews </p>
+          </div>
+  </div>
+    
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">April 16, 2026</p>
+    </div>
+  </div>
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="setup-and-global-functions" class="level2">
+<h2 class="anchored" data-anchor-id="setup-and-global-functions">1. Setup and Global Functions</h2>
+<p>Load the necessary libraries and create helper functions that will be used for modeling, evaluation, and plotting throughout the analysis.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Formatting labels for linear models</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Confusion matrices and Evaluation Metrics</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</div>
+</section>
+<section id="data-loading-and-aggregation" class="level2">
+<h2 class="anchored" data-anchor-id="data-loading-and-aggregation">2. Data Loading and Aggregation</h2>
+<p>Read raw CPUE (cull) and eDNA data.</p>
+<p><strong>Analytical Fixes Implemented:</strong> - Swapped CSV reading for native Excel reading via <code>readxl</code>. - Removed explicit character-to-date formatting strings (<code>"%d/%m/%Y"</code>) that fail on native Excel timestamps, substituting to rely on <code>as.Date</code> acting structurally on numeric-date representations. - Extracted and normalized column names with explicit checks.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Load Cull data</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>cull.dat <span class="ot">&lt;-</span> <span class="fu">read_excel</span>(<span class="st">"data/260201_COTS-Cull-Data-Ewels.xlsx"</span>, <span class="at">sheet =</span> <span class="st">"Cull"</span>)</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Load eDNA data</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>edna.dat <span class="ot">&lt;-</span> <span class="fu">read_excel</span>(<span class="st">"data/eDNA data_ALL_20260225.xlsx"</span>, <span class="at">sheet =</span> <span class="st">"eDNA_data_ALL"</span>)</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Clean Cull Data</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>cull <span class="ot">&lt;-</span> cull.dat <span class="sc">%&gt;%</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    <span class="fu">rename</span>(<span class="at">Reef =</span> ReefName) <span class="sc">%&gt;%</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">date_cull =</span> <span class="fu">as.Date</span>(SurveyDate))</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="co"># Aggregate eDNA data</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>edna_agg <span class="ot">&lt;-</span> edna.dat <span class="sc">%&gt;%</span></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(Year)) <span class="sc">%&gt;%</span></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">rename</span>(<span class="at">Collection.organisation =</span> <span class="st">`</span><span class="at">Collection organisation</span><span class="st">`</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(</span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>        <span class="at">Reef =</span> ReefName,</span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>        <span class="at">Collection.org =</span> <span class="fu">ifelse</span>(Collection.organisation <span class="sc">==</span> <span class="st">"AIMS"</span>, <span class="st">"AIMS"</span>, <span class="st">"Other"</span>),</span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>        <span class="at">date_edna =</span> <span class="fu">as.Date</span>(Date), <span class="co"># Excel supplies native dates</span></span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>        <span class="at">Conc_mean =</span> <span class="fu">as.numeric</span>(Conc_mean)</span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">%&gt;%</span></span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>    <span class="fu">arrange</span>(Reef, Year, date_edna) <span class="sc">%&gt;%</span></span>
+<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(Reef, Collection.org, Year) <span class="sc">%&gt;%</span></span>
+<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a>    <span class="co"># cluster rows into groups where consecutive samples are ≤ 7 days apart</span></span>
+<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(</span>
+<span id="cb2-26"><a href="#cb2-26" aria-hidden="true" tabindex="-1"></a>        <span class="at">grp =</span> <span class="fu">cumsum</span>(</span>
+<span id="cb2-27"><a href="#cb2-27" aria-hidden="true" tabindex="-1"></a>            <span class="fu">if_else</span>(</span>
+<span id="cb2-28"><a href="#cb2-28" aria-hidden="true" tabindex="-1"></a>                <span class="fu">is.na</span>(<span class="fu">lag</span>(date_edna)) <span class="sc">|</span> <span class="fu">as.numeric</span>(date_edna <span class="sc">-</span> <span class="fu">lag</span>(date_edna)) <span class="sc">&gt;</span> <span class="dv">7</span>,</span>
+<span id="cb2-29"><a href="#cb2-29" aria-hidden="true" tabindex="-1"></a>                <span class="dv">1</span>L, <span class="dv">0</span>L</span>
+<span id="cb2-30"><a href="#cb2-30" aria-hidden="true" tabindex="-1"></a>            )</span>
+<span id="cb2-31"><a href="#cb2-31" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb2-32"><a href="#cb2-32" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">%&gt;%</span></span>
+<span id="cb2-33"><a href="#cb2-33" aria-hidden="true" tabindex="-1"></a>    <span class="fu">ungroup</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb2-34"><a href="#cb2-34" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(Reef, Collection.org, Year, grp) <span class="sc">%&gt;%</span></span>
+<span id="cb2-35"><a href="#cb2-35" aria-hidden="true" tabindex="-1"></a>    <span class="fu">summarise</span>(</span>
+<span id="cb2-36"><a href="#cb2-36" aria-hidden="true" tabindex="-1"></a>        <span class="at">date_edna =</span> <span class="fu">min</span>(date_edna),</span>
+<span id="cb2-37"><a href="#cb2-37" aria-hidden="true" tabindex="-1"></a>        <span class="at">conc_mean =</span> <span class="fu">mean</span>(Conc_mean, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb2-38"><a href="#cb2-38" aria-hidden="true" tabindex="-1"></a>        <span class="at">perc_pos  =</span> <span class="fu">mean</span>(LOD_sample_positive, <span class="at">na.rm =</span> <span class="cn">TRUE</span>) <span class="sc">*</span> <span class="dv">100</span>,</span>
+<span id="cb2-39"><a href="#cb2-39" aria-hidden="true" tabindex="-1"></a>        <span class="at">n_samples =</span> <span class="fu">n</span>(),</span>
+<span id="cb2-40"><a href="#cb2-40" aria-hidden="true" tabindex="-1"></a>        <span class="at">.groups   =</span> <span class="st">"drop"</span></span>
+<span id="cb2-41"><a href="#cb2-41" aria-hidden="true" tabindex="-1"></a>    )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</div>
+</section>
+<section id="fuzzy-temporal-joining" class="level2">
+<h2 class="anchored" data-anchor-id="fuzzy-temporal-joining">3. Fuzzy Temporal Joining</h2>
+<p>Merge datasets geographically bounding matches within varying time intervals.</p>
+<section id="matches-within-6-months-183-days" class="level3">
+<h3 class="anchored" data-anchor-id="matches-within-6-months-183-days">3.1 Matches within ± 6 months (183 days)</h3>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>win_days <span class="ot">&lt;-</span> <span class="dv">183</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>same6_any <span class="ot">&lt;-</span> <span class="fu">fuzzy_inner_join</span>(</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    cull, edna_agg,</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">by =</span> <span class="fu">c</span>(<span class="st">"Reef"</span> <span class="ot">=</span> <span class="st">"Reef"</span>, <span class="st">"date_cull"</span> <span class="ot">=</span> <span class="st">"date_edna"</span>),</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">match_fun =</span> <span class="fu">list</span>(</span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>        <span class="st">`</span><span class="at">==</span><span class="st">`</span>,</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>        <span class="cf">function</span>(cull_date, edna_date) {</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>            <span class="fu">abs</span>(<span class="fu">as.numeric</span>(cull_date <span class="sc">-</span> edna_date)) <span class="sc">&lt;=</span> win_days</span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>        }</span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">diff_days =</span> <span class="fu">as.numeric</span>(date_cull <span class="sc">-</span> date_edna), <span class="at">Reef =</span> Reef.x)</span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>reef_any <span class="ot">&lt;-</span> same6_any <span class="sc">%&gt;%</span></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(Reef, Collection.org) <span class="sc">%&gt;%</span></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>    <span class="fu">summarise</span>(</span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>        <span class="at">total_cots      =</span> <span class="fu">sum</span>(Cohort1 <span class="sc">+</span> Cohort2 <span class="sc">+</span> Cohort3 <span class="sc">+</span> Cohort4, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>        <span class="at">total_bottom    =</span> <span class="fu">sum</span>(Bottomtime, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a>        <span class="at">cpue_reef       =</span> total_cots <span class="sc">/</span> total_bottom,</span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a>        <span class="at">perc_pos_reef   =</span> <span class="fu">mean</span>(perc_pos, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a>        <span class="at">conc_mean_reef  =</span> <span class="fu">mean</span>(conc_mean, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a>        <span class="at">n_matches       =</span> <span class="fu">n</span>(),</span>
+<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a>        <span class="at">.groups         =</span> <span class="st">"drop"</span></span>
+<span id="cb3-25"><a href="#cb3-25" aria-hidden="true" tabindex="-1"></a>    )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</div>
+</section>
+<section id="matches-with-edna-prior-to-cull-3-6-and-12-months" class="level3">
+<h3 class="anchored" data-anchor-id="matches-with-edna-prior-to-cull-3-6-and-12-months">3.2 Matches with eDNA Prior to Cull (3, 6, and 12 Months)</h3>
+<p>This represents the primary actionability condition: <em>Did a prior eDNA signal capture an ongoing or succeeding COTS outbreak?</em> We evaluate three horizons to observe signal degradation.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>reef_prior_3m <span class="ot">&lt;-</span> <span class="fu">get_prior_cohort</span>(cull, edna_agg, <span class="dv">91</span>, <span class="st">"3 Months"</span>)</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>reef_prior_6m <span class="ot">&lt;-</span> <span class="fu">get_prior_cohort</span>(cull, edna_agg, <span class="dv">183</span>, <span class="st">"6 Months"</span>)</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>reef_prior_12m <span class="ot">&lt;-</span> <span class="fu">get_prior_cohort</span>(cull, edna_agg, <span class="dv">365</span>, <span class="st">"12 Months"</span>)</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>reef_before <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(reef_prior_3m, reef_prior_6m, reef_prior_12m) <span class="sc">%&gt;%</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">horizon =</span> <span class="fu">factor</span>(horizon, <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"3 Months"</span>, <span class="st">"6 Months"</span>, <span class="st">"12 Months"</span>)))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</div>
+</section>
+</section>
+<section id="initial-linear-comparisons" class="level2">
+<h2 class="anchored" data-anchor-id="initial-linear-comparisons">4. Initial Linear Comparisons</h2>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>p1 <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(reef_before, <span class="fu">aes</span>(<span class="at">x =</span> perc_pos_reef, <span class="at">y =</span> cpue_reef, <span class="at">color =</span> horizon)) <span class="sc">+</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_point</span>(<span class="at">alpha =</span> <span class="fl">0.5</span>, <span class="at">size =</span> <span class="dv">2</span>) <span class="sc">+</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_smooth</span>(<span class="at">method =</span> <span class="st">"lm"</span>, <span class="at">se =</span> <span class="cn">TRUE</span>) <span class="sc">+</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="fl">0.04</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">color =</span> <span class="st">"purple"</span>) <span class="sc">+</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"% eDNA positive"</span>, <span class="at">y =</span> <span class="st">"CPUE"</span>, <span class="at">title =</span> <span class="st">"Prior eDNA (% Pos) vs CPUE"</span>) <span class="sc">+</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">facet_wrap</span>(<span class="sc">~</span>horizon)</span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>p2 <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(reef_before, <span class="fu">aes</span>(<span class="at">x =</span> <span class="fu">log1p</span>(conc_mean_reef), <span class="at">y =</span> cpue_reef, <span class="at">color =</span> horizon)) <span class="sc">+</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_point</span>(<span class="at">alpha =</span> <span class="fl">0.5</span>, <span class="at">size =</span> <span class="dv">2</span>) <span class="sc">+</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_smooth</span>(<span class="at">method =</span> <span class="st">"lm"</span>, <span class="at">se =</span> <span class="cn">TRUE</span>) <span class="sc">+</span></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="fl">0.04</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">color =</span> <span class="st">"purple"</span>) <span class="sc">+</span></span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>    <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"log1p(Mean Concentration)"</span>, <span class="at">y =</span> <span class="st">"CPUE"</span>, <span class="at">title =</span> <span class="st">"Prior eDNA (Conc) vs CPUE"</span>) <span class="sc">+</span></span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>    <span class="fu">facet_wrap</span>(<span class="sc">~</span>horizon)</span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>p1 <span class="sc">/</span> p2</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="eDNA_CPUE_Comparison_pkg_files/figure-html/exploratory-plots-1.png" class="img-fluid figure-img" width="960"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="generalized-linear-mixed-effects-models-glmms" class="level2">
+<h2 class="anchored" data-anchor-id="generalized-linear-mixed-effects-models-glmms">5. Generalized Linear Mixed-Effects Models (GLMMs)</h2>
+<p>We model discrete outcomes (observed COTS numbers) strictly to better encompass count structure offsets driven by varying bottom time. We filter extreme <code>conc_mean_reef &gt;= 5000</code> to constrain highly anomalous impacts on variance gradients.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Filter outliers systematically at modeling onset</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>dat_glmm <span class="ot">&lt;-</span> reef_before <span class="sc">%&gt;%</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>        <span class="at">conc_t    =</span> <span class="fu">log1p</span>(conc_mean_reef),</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>        <span class="at">obs_cpue  =</span> total_cots <span class="sc">/</span> total_bottom</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">%&gt;%</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>        <span class="sc">!</span><span class="fu">is.na</span>(total_cots), <span class="sc">!</span><span class="fu">is.na</span>(total_bottom), total_bottom <span class="sc">&gt;</span> <span class="dv">0</span>,</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>        <span class="sc">!</span><span class="fu">is.na</span>(perc_pos_reef), <span class="sc">!</span><span class="fu">is.na</span>(conc_t), <span class="sc">!</span><span class="fu">is.na</span>(Reef),</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>        conc_mean_reef <span class="sc">&lt;</span> <span class="dv">5000</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">%&gt;%</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">Reef =</span> <span class="fu">factor</span>(Reef)) <span class="sc">%&gt;%</span></span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>    <span class="fu">droplevels</span>()</span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>effort_ref <span class="ot">&lt;-</span> <span class="fu">median</span>(dat_glmm<span class="sc">$</span>total_bottom, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</div>
+<section id="negative-binomial-positive" class="level3">
+<h3 class="anchored" data-anchor-id="negative-binomial-positive">5.1 Negative Binomial (% Positive)</h3>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>horizons <span class="ot">&lt;-</span> <span class="fu">levels</span>(dat_glmm<span class="sc">$</span>horizon)</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>nd_all <span class="ot">&lt;-</span> <span class="fu">map_dfr</span>(horizons, <span class="sc">~</span> <span class="fu">fit_horizon_glmm</span>(.x, dat_glmm)) <span class="sc">%&gt;%</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">horizon =</span> <span class="fu">factor</span>(horizon, <span class="at">levels =</span> horizons))</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(dat_glmm, <span class="fu">aes</span>(<span class="at">x =</span> perc_pos_reef, <span class="at">y =</span> obs_cpue)) <span class="sc">+</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_point</span>(<span class="at">alpha =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="fl">0.04</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">color =</span> <span class="st">"purple"</span>) <span class="sc">+</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_ribbon</span>(<span class="at">data =</span> nd_all, <span class="fu">aes</span>(<span class="at">x =</span> perc_pos_reef, <span class="at">ymin =</span> lcl_cpue, <span class="at">ymax =</span> ucl_cpue, <span class="at">fill =</span> horizon), <span class="at">alpha =</span> <span class="fl">0.3</span>, <span class="at">inherit.aes =</span> <span class="cn">FALSE</span>) <span class="sc">+</span></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_line</span>(<span class="at">data =</span> nd_all, <span class="fu">aes</span>(<span class="at">x =</span> perc_pos_reef, <span class="at">y =</span> fit_cpue, <span class="at">color =</span> horizon), <span class="at">linewidth =</span> <span class="dv">1</span>, <span class="at">inherit.aes =</span> <span class="cn">FALSE</span>) <span class="sc">+</span></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">facet_wrap</span>(<span class="sc">~</span>horizon) <span class="sc">+</span></span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"% eDNA positive"</span>, <span class="at">y =</span> <span class="st">"CPUE"</span>, <span class="at">title =</span> <span class="st">"NegBin GLM Offset Modeling: % Pos Degradation"</span>) <span class="sc">+</span></span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>    <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">"none"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="eDNA_CPUE_Comparison_pkg_files/figure-html/glmm-perc-1.png" class="img-fluid figure-img" width="960"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="negative-binomial-both-predictors-w-interaction" class="level3">
+<h3 class="anchored" data-anchor-id="negative-binomial-both-predictors-w-interaction">5.2 Negative Binomial (Both Predictors w/ Interaction)</h3>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>m_nb_base <span class="ot">&lt;-</span> <span class="fu">glmmTMB</span>(</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    total_cots <span class="sc">~</span> perc_pos_reef <span class="sc">+</span> <span class="fu">offset</span>(<span class="fu">log</span>(total_bottom)) <span class="sc">+</span> (<span class="dv">1</span> <span class="sc">|</span> Reef),</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">family =</span> <span class="fu">nbinom2</span>(),</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">data =</span> dat_glmm</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>m_nb_both <span class="ot">&lt;-</span> <span class="fu">glmmTMB</span>(</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>    total_cots <span class="sc">~</span> perc_pos_reef <span class="sc">*</span> conc_t <span class="sc">+</span> <span class="fu">offset</span>(<span class="fu">log</span>(total_bottom)) <span class="sc">+</span> (<span class="dv">1</span> <span class="sc">|</span> Reef),</span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">family =</span> <span class="fu">nbinom2</span>(),</span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">data =</span> dat_glmm</span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Interaction Anova Validation</span></span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a><span class="fu">anova</span>(m_nb_base, m_nb_both)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>Data: dat_glmm
+Models:
+m_nb_base: total_cots ~ perc_pos_reef + offset(log(total_bottom)) + (1 | , zi=~0, disp=~1
+m_nb_base:     Reef), zi=~0, disp=~1
+m_nb_both: total_cots ~ perc_pos_reef * conc_t + offset(log(total_bottom)) + , zi=~0, disp=~1
+m_nb_both:     (1 | Reef), zi=~0, disp=~1
+          Df    AIC    BIC  logLik deviance  Chisq Chi Df Pr(&gt;Chisq)  
+m_nb_base  4 2674.9 2688.9 -1333.4   2666.9                           
+m_nb_both  6 2669.9 2690.9 -1328.9   2657.9 8.9912      2    0.01116 *
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
+</div>
+</div>
+</section>
+</section>
+<section id="generalized-additive-models-gam" class="level2">
+<h2 class="anchored" data-anchor-id="generalized-additive-models-gam">6. Generalized Additive Models (GAM)</h2>
+<p>Comparing linear assumptions against structured splines.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>g_perc <span class="ot">&lt;-</span> <span class="fu">gam</span>(</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>    total_cots <span class="sc">~</span> <span class="fu">s</span>(perc_pos_reef, <span class="at">k =</span> <span class="dv">3</span>) <span class="sc">+</span> <span class="fu">s</span>(Reef, <span class="at">bs =</span> <span class="st">"re"</span>) <span class="sc">+</span> <span class="fu">offset</span>(<span class="fu">log</span>(total_bottom)),</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">family =</span> <span class="fu">nb</span>(), <span class="at">method =</span> <span class="st">"REML"</span>,</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">data =</span> dat_glmm</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>nd_gam <span class="ot">&lt;-</span> <span class="fu">tibble</span>(</span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">perc_pos_reef =</span> <span class="fu">seq</span>(<span class="fu">min</span>(dat_glmm<span class="sc">$</span>perc_pos_reef), <span class="fu">max</span>(dat_glmm<span class="sc">$</span>perc_pos_reef), <span class="at">length.out =</span> <span class="dv">200</span>),</span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">total_bottom =</span> effort_ref,</span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">Reef =</span> dat_glmm<span class="sc">$</span>Reef[<span class="dv">1</span>]</span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>pp_perc <span class="ot">&lt;-</span> <span class="fu">predict</span>(g_perc, <span class="at">newdata =</span> nd_gam, <span class="at">type =</span> <span class="st">"link"</span>, <span class="at">se.fit =</span> <span class="cn">TRUE</span>, <span class="at">exclude =</span> <span class="st">"s(Reef)"</span>)</span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>nd_gam <span class="ot">&lt;-</span> nd_gam <span class="sc">%&gt;%</span></span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(</span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a>        <span class="at">fit_cpue  =</span> <span class="fu">exp</span>(pp_perc<span class="sc">$</span>fit) <span class="sc">/</span> total_bottom,</span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a>        <span class="at">lcl_cpue  =</span> <span class="fu">exp</span>(pp_perc<span class="sc">$</span>fit <span class="sc">-</span> <span class="fl">1.96</span> <span class="sc">*</span> pp_perc<span class="sc">$</span>se.fit) <span class="sc">/</span> total_bottom,</span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a>        <span class="at">ucl_cpue  =</span> <span class="fu">exp</span>(pp_perc<span class="sc">$</span>fit <span class="sc">+</span> <span class="fl">1.96</span> <span class="sc">*</span> pp_perc<span class="sc">$</span>se.fit) <span class="sc">/</span> total_bottom</span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(dat_glmm, <span class="fu">aes</span>(<span class="at">x =</span> perc_pos_reef, <span class="at">y =</span> obs_cpue)) <span class="sc">+</span></span>
+<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_point</span>(<span class="at">alpha =</span> <span class="fl">0.7</span>) <span class="sc">+</span></span>
+<span id="cb10-23"><a href="#cb10-23" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="fl">0.04</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">color =</span> <span class="st">"purple"</span>) <span class="sc">+</span></span>
+<span id="cb10-24"><a href="#cb10-24" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_ribbon</span>(<span class="at">data =</span> nd_gam, <span class="fu">aes</span>(<span class="at">x =</span> perc_pos_reef, <span class="at">ymin =</span> lcl_cpue, <span class="at">ymax =</span> ucl_cpue), <span class="at">alpha =</span> <span class="fl">0.3</span>, <span class="at">fill =</span> <span class="st">"skyblue"</span>, <span class="at">inherit.aes =</span> <span class="cn">FALSE</span>) <span class="sc">+</span></span>
+<span id="cb10-25"><a href="#cb10-25" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_line</span>(<span class="at">data =</span> nd_gam, <span class="fu">aes</span>(<span class="at">x =</span> perc_pos_reef, <span class="at">y =</span> fit_cpue), <span class="at">linewidth =</span> <span class="dv">1</span>, <span class="at">color =</span> <span class="st">"black"</span>, <span class="at">inherit.aes =</span> <span class="cn">FALSE</span>) <span class="sc">+</span></span>
+<span id="cb10-26"><a href="#cb10-26" aria-hidden="true" tabindex="-1"></a>    <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"GAM Spline NegBin Estimate: % Pos"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="eDNA_CPUE_Comparison_pkg_files/figure-html/gam-perc-1.png" class="img-fluid figure-img" width="672"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="confusion-matrix-decision-modeling" class="level2">
+<h2 class="anchored" data-anchor-id="confusion-matrix-decision-modeling">7. Confusion Matrix Decision Modeling</h2>
+<p>We iterate over thresholds matching traditional Management logic.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Set CPUE Management Threshold</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>cpue_thresh <span class="ot">&lt;-</span> <span class="fl">0.04</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Baseline uses 6 Months max window; Aggregating strictly by Reef</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>dat_evt <span class="ot">&lt;-</span> dat_glmm <span class="sc">%&gt;%</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(horizon <span class="sc">==</span> <span class="st">"6 Months"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(Reef, Collection.org) <span class="sc">%&gt;%</span></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">summarise</span>(</span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>        <span class="at">counts =</span> <span class="fu">sum</span>(total_cots, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>        <span class="at">total_bottom =</span> <span class="fu">sum</span>(total_bottom, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a>        <span class="at">perc_pos =</span> <span class="fu">mean</span>(perc_pos_reef, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>        <span class="at">conc_mean_reef =</span> <span class="fu">mean</span>(conc_mean_reef, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a>        <span class="at">.groups =</span> <span class="st">"drop"</span></span>
+<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">%&gt;%</span></span>
+<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(</span>
+<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a>        <span class="at">reef =</span> Reef,</span>
+<span id="cb11-17"><a href="#cb11-17" aria-hidden="true" tabindex="-1"></a>        <span class="at">cpue =</span> counts <span class="sc">/</span> total_bottom,</span>
+<span id="cb11-18"><a href="#cb11-18" aria-hidden="true" tabindex="-1"></a>        <span class="at">conc_t =</span> <span class="fu">log1p</span>(conc_mean_reef)</span>
+<span id="cb11-19"><a href="#cb11-19" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">%&gt;%</span></span>
+<span id="cb11-20"><a href="#cb11-20" aria-hidden="true" tabindex="-1"></a>    dplyr<span class="sc">::</span><span class="fu">select</span>(reef, Collection.org, perc_pos, conc_t, conc_mean_reef, cpue)</span>
+<span id="cb11-21"><a href="#cb11-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-22"><a href="#cb11-22" aria-hidden="true" tabindex="-1"></a>res_all <span class="ot">&lt;-</span> <span class="fu">make_confusion</span>(dat_evt, <span class="at">perc_thresh =</span> <span class="dv">48</span>, <span class="at">cpue_thresh =</span> cpue_thresh)</span>
+<span id="cb11-23"><a href="#cb11-23" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_confusion</span>(res_all, <span class="at">title =</span> <span class="fu">sprintf</span>(<span class="st">"Full Data Matrix (eDNA ≥ 48%%, CPUE ≥ %.3f)"</span>, cpue_thresh))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="eDNA_CPUE_Comparison_pkg_files/figure-html/confusion-standard-1.png" class="img-fluid figure-img" width="672"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="threshold-selection-via-cross-validation" class="level2">
+<h2 class="anchored" data-anchor-id="threshold-selection-via-cross-validation">8. Threshold Selection via Cross Validation</h2>
+<p>We utilize out-of-fold <code>rsample</code> stratification testing to derive optimal classification rules explicitly guarding F1 recall bounds under variable density environments.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 1) Evaluate on a grid of %pos AND cpue thresholds (Heatmap)</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>perc_grid <span class="ot">&lt;-</span> <span class="fu">seq</span>(<span class="dv">0</span>, <span class="dv">100</span>, <span class="at">by =</span> <span class="dv">2</span>)</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>cpue_grid <span class="ot">&lt;-</span> <span class="fu">seq</span>(<span class="dv">0</span>, <span class="fu">quantile</span>(dat_evt<span class="sc">$</span>cpue, <span class="fl">0.99</span>, <span class="at">na.rm =</span> <span class="cn">TRUE</span>), <span class="at">length.out =</span> <span class="dv">40</span>)</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>grid <span class="ot">&lt;-</span> tidyr<span class="sc">::</span><span class="fu">expand_grid</span>(<span class="at">perc_thresh =</span> perc_grid, <span class="at">cpue_thresh =</span> cpue_grid) <span class="sc">%&gt;%</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(</span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>        <span class="at">out =</span> purrr<span class="sc">::</span><span class="fu">pmap</span>(., <span class="sc">~</span> <span class="fu">metrics_for</span>(..<span class="dv">1</span>, ..<span class="dv">2</span>, dat_evt)),</span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>        <span class="at">F1 =</span> <span class="fu">vapply</span>(out, <span class="st">`</span><span class="at">[[</span><span class="st">`</span>, <span class="fu">numeric</span>(<span class="dv">1</span>), <span class="st">"F1"</span>),</span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>        <span class="at">Accuracy =</span> <span class="fu">vapply</span>(out, <span class="st">`</span><span class="at">[[</span><span class="st">`</span>, <span class="fu">numeric</span>(<span class="dv">1</span>), <span class="st">"Accuracy"</span>)</span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">%&gt;%</span></span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>    dplyr<span class="sc">::</span><span class="fu">select</span>(<span class="sc">-</span>out)</span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a><span class="co"># F1 Heatmap</span></span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>p_hm <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(grid, <span class="fu">aes</span>(<span class="at">x =</span> perc_thresh, <span class="at">y =</span> cpue_thresh, <span class="at">fill =</span> F1)) <span class="sc">+</span></span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_raster</span>() <span class="sc">+</span></span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_contour</span>(<span class="fu">aes</span>(<span class="at">z =</span> F1), <span class="at">breaks =</span> <span class="fu">seq</span>(<span class="fl">0.2</span>, <span class="dv">1</span>, <span class="at">by =</span> <span class="fl">0.2</span>), <span class="at">colour =</span> <span class="st">"black"</span>, <span class="at">linewidth =</span> <span class="fl">0.3</span>, <span class="at">alpha =</span> <span class="fl">0.7</span>) <span class="sc">+</span></span>
+<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a>    <span class="fu">scale_fill_viridis_c</span>(<span class="at">limits =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>)) <span class="sc">+</span></span>
+<span id="cb12-18"><a href="#cb12-18" aria-hidden="true" tabindex="-1"></a>    <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"eDNA % positive threshold"</span>, <span class="at">y =</span> <span class="st">"CPUE threshold"</span>, <span class="at">fill =</span> <span class="st">"F1"</span>, <span class="at">title =</span> <span class="st">"F1 across %pos thresholds with iso-F1 contours"</span>)</span>
+<span id="cb12-19"><a href="#cb12-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-20"><a href="#cb12-20" aria-hidden="true" tabindex="-1"></a><span class="co"># 2) Cross validate across multiple CPUE levels</span></span>
+<span id="cb12-21"><a href="#cb12-21" aria-hidden="true" tabindex="-1"></a>cpue_levels <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="fl">0.01</span>, <span class="fl">0.02</span>, <span class="fl">0.04</span>, <span class="fl">0.06</span>, <span class="fl">0.08</span>, <span class="fl">0.10</span>)</span>
+<span id="cb12-22"><a href="#cb12-22" aria-hidden="true" tabindex="-1"></a>k <span class="ot">&lt;-</span> <span class="dv">5</span></span>
+<span id="cb12-23"><a href="#cb12-23" aria-hidden="true" tabindex="-1"></a>R <span class="ot">&lt;-</span> <span class="dv">100</span> <span class="co"># Reduced from 200 for rendering speed</span></span>
+<span id="cb12-24"><a href="#cb12-24" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1</span>)</span>
+<span id="cb12-25"><a href="#cb12-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-26"><a href="#cb12-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-27"><a href="#cb12-27" aria-hidden="true" tabindex="-1"></a>results <span class="ot">&lt;-</span> <span class="fu">map</span>(cpue_levels, <span class="sc">~</span> <span class="fu">run_cv_for_cpue</span>(dat_evt, .x, perc_grid, <span class="at">k =</span> k, <span class="at">R =</span> R))</span>
+<span id="cb12-28"><a href="#cb12-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-29"><a href="#cb12-29" aria-hidden="true" tabindex="-1"></a>summary_table <span class="ot">&lt;-</span> <span class="fu">map_dfr</span>(results, <span class="st">"perf_sum"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb12-30"><a href="#cb12-30" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(</span>
+<span id="cb12-31"><a href="#cb12-31" aria-hidden="true" tabindex="-1"></a>        <span class="at">F1_mean_se   =</span> <span class="fu">sprintf</span>(<span class="st">"%.3f ± %.3f"</span>, F1_mean, F1_se),</span>
+<span id="cb12-32"><a href="#cb12-32" aria-hidden="true" tabindex="-1"></a>        <span class="at">Acc_mean_se  =</span> <span class="fu">sprintf</span>(<span class="st">"%.3f ± %.3f"</span>, Acc_mean, Acc_se),</span>
+<span id="cb12-33"><a href="#cb12-33" aria-hidden="true" tabindex="-1"></a>        <span class="at">Prec_mean_se =</span> <span class="fu">sprintf</span>(<span class="st">"%.3f ± %.3f"</span>, Prec_mean, Prec_se),</span>
+<span id="cb12-34"><a href="#cb12-34" aria-hidden="true" tabindex="-1"></a>        <span class="at">Rec_mean_se  =</span> <span class="fu">sprintf</span>(<span class="st">"%.3f ± %.3f"</span>, Rec_mean, Rec_se)</span>
+<span id="cb12-35"><a href="#cb12-35" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">%&gt;%</span></span>
+<span id="cb12-36"><a href="#cb12-36" aria-hidden="true" tabindex="-1"></a>    dplyr<span class="sc">::</span><span class="fu">select</span>(cpue_thr, perc_star, F1_mean_se, Acc_mean_se, Prec_mean_se, Rec_mean_se)</span>
+<span id="cb12-37"><a href="#cb12-37" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-38"><a href="#cb12-38" aria-hidden="true" tabindex="-1"></a><span class="co"># Show the optimal threshold summary</span></span>
+<span id="cb12-39"><a href="#cb12-39" aria-hidden="true" tabindex="-1"></a>summary_table</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 6 × 6
+  cpue_thr perc_star F1_mean_se    Acc_mean_se   Prec_mean_se  Rec_mean_se  
+     &lt;dbl&gt;     &lt;dbl&gt; &lt;chr&gt;         &lt;chr&gt;         &lt;chr&gt;         &lt;chr&gt;        
+1     0.01        46 0.897 ± 0.004 0.858 ± 0.006 0.890 ± 0.005 0.917 ± 0.006
+2     0.02        46 0.849 ± 0.004 0.800 ± 0.006 0.779 ± 0.006 0.950 ± 0.004
+3     0.04        62 0.732 ± 0.008 0.800 ± 0.006 0.646 ± 0.009 0.900 ± 0.009
+4     0.06        62 0.605 ± 0.010 0.741 ± 0.007 0.494 ± 0.011 0.868 ± 0.013
+5     0.08        82 0.456 ± 0.018 0.829 ± 0.006 0.393 ± 0.017 0.600 ± 0.022
+6     0.1         82 0.251 ± 0.016 0.829 ± 0.006 0.227 ± 0.015 0.321 ± 0.020</code></pre>
+</div>
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Plot multi-panel confusion matrices</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>cm_all <span class="ot">&lt;-</span> <span class="fu">map_dfr</span>(results, <span class="cf">function</span>(r) {</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>    r<span class="sc">$</span>cm_full<span class="sc">$</span>cm <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">cpue_thr =</span> r<span class="sc">$</span>cpue_thr, <span class="at">perc_star =</span> r<span class="sc">$</span>perc_star)</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>}) <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">panel =</span> <span class="fu">paste0</span>(<span class="st">"CPUE ≥ "</span>, cpue_thr, <span class="st">"</span><span class="sc">\n</span><span class="st">%pos* = "</span>, perc_star))</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>p_cm <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(cm_all, <span class="fu">aes</span>(<span class="at">x =</span> pred, <span class="at">y =</span> actual, <span class="at">fill =</span> row_prop)) <span class="sc">+</span></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_tile</span>(<span class="at">color =</span> <span class="st">"grey85"</span>, <span class="at">linewidth =</span> <span class="fl">0.4</span>) <span class="sc">+</span></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_text</span>(<span class="fu">aes</span>(<span class="at">label =</span> label), <span class="at">size =</span> <span class="dv">4</span>, <span class="at">color =</span> <span class="st">"black"</span>) <span class="sc">+</span></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>    <span class="fu">facet_wrap</span>(<span class="sc">~</span>panel, <span class="at">ncol =</span> <span class="dv">3</span>) <span class="sc">+</span></span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">scale_fill_viridis_c</span>(<span class="at">option =</span> <span class="st">"mako"</span>, <span class="at">direction =</span> <span class="sc">-</span><span class="dv">1</span>, <span class="at">begin =</span> <span class="fl">0.25</span>, <span class="at">name =</span> <span class="st">"Count Rate"</span>) <span class="sc">+</span></span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Prediction from eDNA (% pos)"</span>, <span class="at">y =</span> <span class="st">"Ground truth from CPUE"</span>, <span class="at">title =</span> <span class="st">"Confusion matrices with CV-tuned thresholds"</span>) <span class="sc">+</span></span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>    <span class="fu">coord_fixed</span>()</span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a>p_hm</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="eDNA_CPUE_Comparison_pkg_files/figure-html/cross-validation-1.png" class="img-fluid figure-img" width="960"></p>
+</figure>
+</div>
+</div>
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>p_cm</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="eDNA_CPUE_Comparison_pkg_files/figure-html/cross-validation-2.png" class="img-fluid figure-img" width="960"></p>
+</figure>
+</div>
+</div>
+</div>
+<section id="horizon-specific-thresholding-cpue-0.02" class="level3">
+<h3 class="anchored" data-anchor-id="horizon-specific-thresholding-cpue-0.02">8.1 Horizon-Specific Thresholding (CPUE ≥ 0.02)</h3>
+<p>To evaluate eDNA signal durability, we cross-validate optimal <code>% Pos</code> thresholds iteratively across our three temporal windows (<code>3 Months</code>, <code>6 Months</code>, <code>12 Months</code>) targeting the management CPUE constraint of <code>0.02</code>.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>cpue_target <span class="ot">&lt;-</span> <span class="fl">0.02</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Ensure we aggregate strictly by Reef to prevent Site-level contamination</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>dat_evt_hor <span class="ot">&lt;-</span> dat_glmm <span class="sc">%&gt;%</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(Reef, Collection.org, horizon) <span class="sc">%&gt;%</span></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">summarise</span>(</span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>        <span class="at">counts =</span> <span class="fu">sum</span>(total_cots, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>        <span class="at">total_bottom =</span> <span class="fu">sum</span>(total_bottom, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>        <span class="at">perc_pos =</span> <span class="fu">mean</span>(perc_pos_reef, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>        <span class="at">.groups =</span> <span class="st">"drop"</span></span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">%&gt;%</span></span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(</span>
+<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a>        <span class="at">reef =</span> Reef,</span>
+<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>        <span class="at">cpue =</span> counts <span class="sc">/</span> total_bottom</span>
+<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">%&gt;%</span></span>
+<span id="cb16-16"><a href="#cb16-16" aria-hidden="true" tabindex="-1"></a>    dplyr<span class="sc">::</span><span class="fu">select</span>(reef, Collection.org, perc_pos, cpue, horizon)</span>
+<span id="cb16-17"><a href="#cb16-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-18"><a href="#cb16-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-19"><a href="#cb16-19" aria-hidden="true" tabindex="-1"></a>horizons <span class="ot">&lt;-</span> <span class="fu">levels</span>(dat_evt_hor<span class="sc">$</span>horizon)</span>
+<span id="cb16-20"><a href="#cb16-20" aria-hidden="true" tabindex="-1"></a>results_hor <span class="ot">&lt;-</span> <span class="fu">map</span>(horizons, <span class="sc">~</span> <span class="fu">run_cv_for_horizon</span>(dat_evt_hor, .x, cpue_target, perc_grid, <span class="at">k =</span> k, <span class="at">R =</span> R))</span>
+<span id="cb16-21"><a href="#cb16-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-22"><a href="#cb16-22" aria-hidden="true" tabindex="-1"></a>summary_hor <span class="ot">&lt;-</span> <span class="fu">map_dfr</span>(results_hor, <span class="st">"perf_sum"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb16-23"><a href="#cb16-23" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(</span>
+<span id="cb16-24"><a href="#cb16-24" aria-hidden="true" tabindex="-1"></a>        <span class="at">F1_mean_se   =</span> <span class="fu">sprintf</span>(<span class="st">"%.3f ± %.3f"</span>, F1_mean, F1_se),</span>
+<span id="cb16-25"><a href="#cb16-25" aria-hidden="true" tabindex="-1"></a>        <span class="at">Acc_mean_se  =</span> <span class="fu">sprintf</span>(<span class="st">"%.3f ± %.3f"</span>, Acc_mean, Acc_se),</span>
+<span id="cb16-26"><a href="#cb16-26" aria-hidden="true" tabindex="-1"></a>        <span class="at">Prec_mean_se =</span> <span class="fu">sprintf</span>(<span class="st">"%.3f ± %.3f"</span>, Prec_mean, Prec_se),</span>
+<span id="cb16-27"><a href="#cb16-27" aria-hidden="true" tabindex="-1"></a>        <span class="at">Rec_mean_se  =</span> <span class="fu">sprintf</span>(<span class="st">"%.3f ± %.3f"</span>, Rec_mean, Rec_se)</span>
+<span id="cb16-28"><a href="#cb16-28" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">%&gt;%</span></span>
+<span id="cb16-29"><a href="#cb16-29" aria-hidden="true" tabindex="-1"></a>    dplyr<span class="sc">::</span><span class="fu">select</span>(horizon, cpue_thr, perc_star, F1_mean_se, Acc_mean_se, Prec_mean_se, Rec_mean_se)</span>
+<span id="cb16-30"><a href="#cb16-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-31"><a href="#cb16-31" aria-hidden="true" tabindex="-1"></a>summary_hor</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 3 × 7
+  horizon   cpue_thr perc_star F1_mean_se   Acc_mean_se Prec_mean_se Rec_mean_se
+  &lt;chr&gt;        &lt;dbl&gt;     &lt;dbl&gt; &lt;chr&gt;        &lt;chr&gt;       &lt;chr&gt;        &lt;chr&gt;      
+1 3 Months      0.02        48 0.900 ± 0.0… 0.873 ± 0.… 0.829 ± 0.0… 1.000 ± 0.…
+2 6 Months      0.02        46 0.849 ± 0.0… 0.800 ± 0.… 0.780 ± 0.0… 0.950 ± 0.…
+3 12 Months     0.02        48 0.797 ± 0.0… 0.751 ± 0.… 0.692 ± 0.0… 0.955 ± 0.…</code></pre>
+</div>
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>cm_all_hor <span class="ot">&lt;-</span> <span class="fu">map_dfr</span>(results_hor, <span class="cf">function</span>(r) {</span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>    r<span class="sc">$</span>cm_full<span class="sc">$</span>cm <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">cpue_thr =</span> r<span class="sc">$</span>cpue_thr, <span class="at">perc_star =</span> r<span class="sc">$</span>perc_star)</span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>}) <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">panel =</span> <span class="fu">factor</span>(<span class="fu">paste0</span>(horizon, <span class="st">"</span><span class="sc">\n</span><span class="st">%pos* = "</span>, perc_star), <span class="at">levels =</span> <span class="fu">paste0</span>(<span class="fu">levels</span>(dat_evt_hor<span class="sc">$</span>horizon), <span class="st">"</span><span class="sc">\n</span><span class="st">%pos* = "</span>, <span class="fu">map_dbl</span>(results_hor, <span class="st">"perc_star"</span>))))</span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>p_cm_hor <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(cm_all_hor, <span class="fu">aes</span>(<span class="at">x =</span> pred, <span class="at">y =</span> actual, <span class="at">fill =</span> row_prop)) <span class="sc">+</span></span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_tile</span>(<span class="at">color =</span> <span class="st">"grey85"</span>, <span class="at">linewidth =</span> <span class="fl">0.4</span>) <span class="sc">+</span></span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_text</span>(<span class="fu">aes</span>(<span class="at">label =</span> label), <span class="at">size =</span> <span class="dv">4</span>, <span class="at">color =</span> <span class="st">"black"</span>) <span class="sc">+</span></span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">facet_wrap</span>(<span class="sc">~</span>panel, <span class="at">ncol =</span> <span class="dv">3</span>) <span class="sc">+</span></span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a>    <span class="fu">scale_fill_viridis_c</span>(<span class="at">option =</span> <span class="st">"mako"</span>, <span class="at">direction =</span> <span class="sc">-</span><span class="dv">1</span>, <span class="at">begin =</span> <span class="fl">0.25</span>, <span class="at">name =</span> <span class="st">"Count Rate"</span>) <span class="sc">+</span></span>
+<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Prediction from eDNA (% pos)"</span>, <span class="at">y =</span> <span class="st">"Ground truth from CPUE"</span>, <span class="at">title =</span> <span class="fu">sprintf</span>(<span class="st">"Confusion Matrices across Horizons (CPUE ≥ %.2f)"</span>, cpue_target)) <span class="sc">+</span></span>
+<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">coord_fixed</span>()</span>
+<span id="cb18-12"><a href="#cb18-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-13"><a href="#cb18-13" aria-hidden="true" tabindex="-1"></a>p_cm_hor</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="eDNA_CPUE_Comparison_pkg_files/figure-html/cv-horizon-1.png" class="img-fluid figure-img" width="960"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+</section>
+<section id="multivariate-rule-search" class="level2">
+<h2 class="anchored" data-anchor-id="multivariate-rule-search">9. Multivariate Rule Search</h2>
+<p>Combining <code>% Pos</code> AND <code>% Conc</code> conditions under 2D constraints. By modeling concentration in log-transformed space (<code>conc_t</code>), we fix skewed grid sparsity and resolve the F1 heatmaps dropping out continuously.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Tune on transformed concentration to avoid skewness clustering 0s all the way across</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>conc_t_max <span class="ot">&lt;-</span> <span class="fu">quantile</span>(dat_evt<span class="sc">$</span>conc_t, <span class="fl">0.99</span>, <span class="at">na.rm =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>conc_grid_t <span class="ot">&lt;-</span> <span class="fu">seq</span>(<span class="fu">min</span>(dat_evt<span class="sc">$</span>conc_t, <span class="at">na.rm =</span> <span class="cn">TRUE</span>), conc_t_max, <span class="at">length.out =</span> <span class="dv">30</span>)</span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Evaluate OR and AND grids over 2D thresholds for a baseline cpue</span></span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>cpue_star <span class="ot">&lt;-</span> <span class="fl">0.04</span></span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a>grid_both_and <span class="ot">&lt;-</span> tidyr<span class="sc">::</span><span class="fu">expand_grid</span>(<span class="at">perc_thresh =</span> <span class="fu">seq</span>(<span class="dv">0</span>, <span class="dv">100</span>, <span class="at">by =</span> <span class="dv">2</span>), <span class="at">conc_thresh_t =</span> conc_grid_t) <span class="sc">%&gt;%</span></span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(</span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a>        <span class="at">out =</span> purrr<span class="sc">::</span><span class="fu">pmap</span>(., <span class="sc">~</span> <span class="fu">metrics_for_both</span>(..<span class="dv">1</span>, ..<span class="dv">2</span>, cpue_star, <span class="st">"and"</span>, dat_evt)),</span>
+<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a>        <span class="at">F1 =</span> <span class="fu">vapply</span>(out, <span class="st">`</span><span class="at">[[</span><span class="st">`</span>, <span class="fu">numeric</span>(<span class="dv">1</span>), <span class="st">"F1"</span>)</span>
+<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb19-13"><a href="#cb19-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-14"><a href="#cb19-14" aria-hidden="true" tabindex="-1"></a>p_2dhm <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(grid_both_and, <span class="fu">aes</span>(<span class="at">x =</span> perc_thresh, <span class="at">y =</span> <span class="fu">expm1</span>(conc_thresh_t), <span class="at">fill =</span> F1)) <span class="sc">+</span></span>
+<span id="cb19-15"><a href="#cb19-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_raster</span>() <span class="sc">+</span></span>
+<span id="cb19-16"><a href="#cb19-16" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_contour</span>(<span class="fu">aes</span>(<span class="at">z =</span> F1), <span class="at">breaks =</span> <span class="fu">seq</span>(<span class="fl">0.2</span>, <span class="fl">0.9</span>, <span class="at">by =</span> <span class="fl">0.2</span>), <span class="at">colour =</span> <span class="st">"black"</span>, <span class="at">linewidth =</span> <span class="fl">0.3</span>) <span class="sc">+</span></span>
+<span id="cb19-17"><a href="#cb19-17" aria-hidden="true" tabindex="-1"></a>    <span class="fu">scale_fill_viridis_c</span>(<span class="at">limits =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>)) <span class="sc">+</span></span>
+<span id="cb19-18"><a href="#cb19-18" aria-hidden="true" tabindex="-1"></a>    <span class="fu">scale_y_continuous</span>(<span class="at">trans =</span> scales<span class="sc">::</span><span class="fu">pseudo_log_trans</span>(<span class="at">sigma =</span> <span class="dv">1</span>)) <span class="sc">+</span></span>
+<span id="cb19-19"><a href="#cb19-19" aria-hidden="true" tabindex="-1"></a>    <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"% eDNA Positive Threshold"</span>, <span class="at">y =</span> <span class="st">"Concentration Threshold (pseudo-log)"</span>, <span class="at">title =</span> <span class="fu">sprintf</span>(<span class="st">"2D Boolean Search: AND Rule F1 (CPUE ≥ %.3f)"</span>, cpue_star))</span>
+<span id="cb19-20"><a href="#cb19-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-21"><a href="#cb19-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-22"><a href="#cb19-22" aria-hidden="true" tabindex="-1"></a><span class="co"># Full 2D Loop over CPUE levels</span></span>
+<span id="cb19-23"><a href="#cb19-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-24"><a href="#cb19-24" aria-hidden="true" tabindex="-1"></a>results_2d <span class="ot">&lt;-</span> <span class="fu">map</span>(cpue_levels, <span class="sc">~</span> <span class="fu">run_cv_2d</span>(dat_evt, .x, <span class="fu">seq</span>(<span class="dv">0</span>, <span class="dv">100</span>, <span class="at">by =</span> <span class="dv">5</span>), conc_grid_t, <span class="at">rule =</span> <span class="st">"and"</span>)) <span class="co"># %&gt;% discard(is.null)</span></span>
+<span id="cb19-25"><a href="#cb19-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-26"><a href="#cb19-26" aria-hidden="true" tabindex="-1"></a>summary_table_2d <span class="ot">&lt;-</span> <span class="fu">map_dfr</span>(results_2d, <span class="st">"perf"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb19-27"><a href="#cb19-27" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(</span>
+<span id="cb19-28"><a href="#cb19-28" aria-hidden="true" tabindex="-1"></a>        <span class="at">F1_mean_se   =</span> <span class="fu">sprintf</span>(<span class="st">"%.3f ± %.3f"</span>, F1_mean, F1_se),</span>
+<span id="cb19-29"><a href="#cb19-29" aria-hidden="true" tabindex="-1"></a>        <span class="at">Acc_mean_se  =</span> <span class="fu">sprintf</span>(<span class="st">"%.3f ± %.3f"</span>, Acc_mean, Acc_se),</span>
+<span id="cb19-30"><a href="#cb19-30" aria-hidden="true" tabindex="-1"></a>        <span class="at">Prec_mean_se =</span> <span class="fu">sprintf</span>(<span class="st">"%.3f ± %.3f"</span>, Prec_mean, Prec_se),</span>
+<span id="cb19-31"><a href="#cb19-31" aria-hidden="true" tabindex="-1"></a>        <span class="at">Rec_mean_se  =</span> <span class="fu">sprintf</span>(<span class="st">"%.3f ± %.3f"</span>, Rec_mean, Rec_se)</span>
+<span id="cb19-32"><a href="#cb19-32" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">%&gt;%</span></span>
+<span id="cb19-33"><a href="#cb19-33" aria-hidden="true" tabindex="-1"></a>    dplyr<span class="sc">::</span><span class="fu">select</span>(cpue_thr, perc_star, conc_mean_star, F1_mean_se, Acc_mean_se, Prec_mean_se, Rec_mean_se)</span>
+<span id="cb19-34"><a href="#cb19-34" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-35"><a href="#cb19-35" aria-hidden="true" tabindex="-1"></a><span class="co"># Show operational 2D thresholds</span></span>
+<span id="cb19-36"><a href="#cb19-36" aria-hidden="true" tabindex="-1"></a>summary_table_2d</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 6 × 7
+  cpue_thr perc_star conc_mean_star F1_mean_se    Acc_mean_se   Prec_mean_se 
+     &lt;dbl&gt;     &lt;dbl&gt;          &lt;dbl&gt; &lt;chr&gt;         &lt;chr&gt;         &lt;chr&gt;        
+1     0.01        40           4.85 0.815 ± 0.005 0.750 ± 0.006 0.827 ± 0.006
+2     0.02        50           7.11 0.808 ± 0.006 0.774 ± 0.006 0.806 ± 0.007
+3     0.04        50          17.3  0.633 ± 0.012 0.777 ± 0.006 0.585 ± 0.013
+4     0.06        50          17.3  0.461 ± 0.014 0.739 ± 0.006 0.407 ± 0.014
+5     0.08        80          24.4  0.223 ± 0.012 0.721 ± 0.006 0.155 ± 0.009
+6     0.1         80          24.4  0.104 ± 0.010 0.776 ± 0.007 0.083 ± 0.009
+# ℹ 1 more variable: Rec_mean_se &lt;chr&gt;</code></pre>
+</div>
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Plot 2D Multi-CM</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>thr_df <span class="ot">&lt;-</span> <span class="fu">map_dfr</span>(results_2d, <span class="st">"thr"</span>) <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">cpue_thr =</span> <span class="fu">sapply</span>(results_2d, <span class="cf">function</span>(x) x<span class="sc">$</span>perf<span class="sc">$</span>cpue_thr))</span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>cm_all_2d <span class="ot">&lt;-</span> <span class="fu">pmap_dfr</span>(<span class="fu">list</span>(thr_df<span class="sc">$</span>cpue_thr, thr_df<span class="sc">$</span>perc_star, thr_df<span class="sc">$</span>conc_t_star), <span class="cf">function</span>(cp, p, c) {</span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>    obj <span class="ot">&lt;-</span> <span class="fu">make_confusion_2d</span>(dat_evt, p, c, cp)</span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>    obj<span class="sc">$</span>cm <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">panel =</span> <span class="fu">paste0</span>(<span class="st">"CPUE ≥ "</span>, cp, <span class="st">"</span><span class="sc">\n</span><span class="st">%pos*="</span>, <span class="fu">round</span>(p, <span class="dv">1</span>), <span class="st">"  conc*≈"</span>, <span class="fu">round</span>(<span class="fu">pmax</span>(<span class="fu">expm1</span>(c), <span class="dv">0</span>), <span class="dv">1</span>)))</span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>})</span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a>p_2dcm <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(cm_all_2d, <span class="fu">aes</span>(pred, actual, <span class="at">fill =</span> row_prop)) <span class="sc">+</span></span>
+<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_tile</span>(<span class="at">color =</span> <span class="st">"grey85"</span>, <span class="at">linewidth =</span> <span class="fl">0.4</span>) <span class="sc">+</span></span>
+<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_text</span>(<span class="fu">aes</span>(<span class="at">label =</span> label), <span class="at">size =</span> <span class="dv">4</span>, <span class="at">color =</span> <span class="st">"black"</span>) <span class="sc">+</span></span>
+<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a>    <span class="fu">facet_wrap</span>(<span class="sc">~</span>panel, <span class="at">ncol =</span> <span class="dv">3</span>) <span class="sc">+</span></span>
+<span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a>    <span class="fu">scale_fill_viridis_c</span>(<span class="at">option =</span> <span class="st">"mako"</span>, <span class="at">direction =</span> <span class="sc">-</span><span class="dv">1</span>, <span class="at">begin =</span> <span class="fl">0.25</span>, <span class="at">limits =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>), <span class="at">name =</span> <span class="st">"Row Rate"</span>) <span class="sc">+</span></span>
+<span id="cb21-14"><a href="#cb21-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">labs</span>(<span class="at">x =</span> <span class="st">"Prediction (2D rule)"</span>, <span class="at">y =</span> <span class="st">"Ground truth (CPUE)"</span>, <span class="at">title =</span> <span class="st">"2D AND Rule Confusion Matrices"</span>) <span class="sc">+</span></span>
+<span id="cb21-15"><a href="#cb21-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">coord_fixed</span>()</span>
+<span id="cb21-16"><a href="#cb21-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-17"><a href="#cb21-17" aria-hidden="true" tabindex="-1"></a>p_2dhm</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="eDNA_CPUE_Comparison_pkg_files/figure-html/2D-search-1.png" class="img-fluid figure-img" width="960"></p>
+</figure>
+</div>
+</div>
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>p_2dcm</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="eDNA_CPUE_Comparison_pkg_files/figure-html/2D-search-2.png" class="img-fluid figure-img" width="960"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="site-level-spatial-buffer-analysis" class="level2">
+<h2 class="anchored" data-anchor-id="site-level-spatial-buffer-analysis">10. Site-Level Spatial Buffer Analysis</h2>
+<p>To evaluate eDNA’s predictive power at granular physical site boundaries rather than arbitrary Reefs, we extract explicit geographic boundaries from both datasets. Cultivating representative site locations mitigates broader environmental noise by strictly evaluating COTS overlap physically clustered against the immediate eDNA sample trace.</p>
+<p>Importantly, this spatial test formally evaluates differing sampling regimes present in the program (e.g., <code>4 sites x 6 samples</code> vs <code>3 sites x 12 samples</code>).</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(sf)</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Standardize eDNA sample cohorts by their physical 'Site' level rather than 'Reef' layer</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>edna_site <span class="ot">&lt;-</span> edna.dat <span class="sc">%&gt;%</span></span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(Lat), <span class="sc">!</span><span class="fu">is.na</span>(Long), <span class="sc">!</span><span class="fu">is.na</span>(Year)) <span class="sc">%&gt;%</span></span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">date_edna =</span> <span class="fu">as.Date</span>(Date)) <span class="sc">%&gt;%</span></span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(ReefName, Site_name, Year) <span class="sc">%&gt;%</span></span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">summarise</span>(</span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>        <span class="at">Lat =</span> <span class="fu">mean</span>(Lat),</span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>        <span class="at">Long =</span> <span class="fu">mean</span>(Long),</span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a>        <span class="at">date_edna =</span> <span class="fu">min</span>(date_edna),</span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a>        <span class="at">conc_mean =</span> <span class="fu">mean</span>(<span class="fu">as.numeric</span>(Conc_mean), <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a>        <span class="at">perc_pos =</span> <span class="fu">mean</span>(LOD_sample_positive, <span class="at">na.rm =</span> <span class="cn">TRUE</span>) <span class="sc">*</span> <span class="dv">100</span>,</span>
+<span id="cb23-14"><a href="#cb23-14" aria-hidden="true" tabindex="-1"></a>        <span class="at">n_samples =</span> <span class="fu">n</span>(),</span>
+<span id="cb23-15"><a href="#cb23-15" aria-hidden="true" tabindex="-1"></a>        <span class="at">.groups =</span> <span class="st">"drop"</span></span>
+<span id="cb23-16"><a href="#cb23-16" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">%&gt;%</span></span>
+<span id="cb23-17"><a href="#cb23-17" aria-hidden="true" tabindex="-1"></a>    <span class="fu">rename</span>(<span class="at">Reef =</span> ReefName)</span>
+<span id="cb23-18"><a href="#cb23-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-19"><a href="#cb23-19" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Tag Sampling Regimes based on local density</span></span>
+<span id="cb23-20"><a href="#cb23-20" aria-hidden="true" tabindex="-1"></a><span class="co"># (avg_samples per site usually bounds around ~6 or ~12)</span></span>
+<span id="cb23-21"><a href="#cb23-21" aria-hidden="true" tabindex="-1"></a>regime_df <span class="ot">&lt;-</span> edna_site <span class="sc">%&gt;%</span></span>
+<span id="cb23-22"><a href="#cb23-22" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(Reef, Year) <span class="sc">%&gt;%</span></span>
+<span id="cb23-23"><a href="#cb23-23" aria-hidden="true" tabindex="-1"></a>    <span class="fu">summarise</span>(</span>
+<span id="cb23-24"><a href="#cb23-24" aria-hidden="true" tabindex="-1"></a>        <span class="at">avg_samples =</span> <span class="fu">mean</span>(n_samples),</span>
+<span id="cb23-25"><a href="#cb23-25" aria-hidden="true" tabindex="-1"></a>        <span class="at">.groups =</span> <span class="st">"drop"</span></span>
+<span id="cb23-26"><a href="#cb23-26" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">%&gt;%</span></span>
+<span id="cb23-27"><a href="#cb23-27" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(</span>
+<span id="cb23-28"><a href="#cb23-28" aria-hidden="true" tabindex="-1"></a>        <span class="at">regime =</span> <span class="fu">case_when</span>(</span>
+<span id="cb23-29"><a href="#cb23-29" aria-hidden="true" tabindex="-1"></a>            avg_samples <span class="sc">&gt;=</span> <span class="dv">10</span> <span class="sc">~</span> <span class="st">"3x12 Density"</span>,</span>
+<span id="cb23-30"><a href="#cb23-30" aria-hidden="true" tabindex="-1"></a>            <span class="cn">TRUE</span> <span class="sc">~</span> <span class="st">"4x6 Density"</span></span>
+<span id="cb23-31"><a href="#cb23-31" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb23-32"><a href="#cb23-32" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb23-33"><a href="#cb23-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-34"><a href="#cb23-34" aria-hidden="true" tabindex="-1"></a>edna_site <span class="ot">&lt;-</span> edna_site <span class="sc">%&gt;%</span> <span class="fu">left_join</span>(regime_df, <span class="at">by =</span> <span class="fu">c</span>(<span class="st">"Reef"</span>, <span class="st">"Year"</span>))</span>
+<span id="cb23-35"><a href="#cb23-35" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-36"><a href="#cb23-36" aria-hidden="true" tabindex="-1"></a><span class="co"># 3. Project coordinate matrices into native EPSG:3112 (Lambert Conformal Conic for AUS)</span></span>
+<span id="cb23-37"><a href="#cb23-37" aria-hidden="true" tabindex="-1"></a>edna_sf <span class="ot">&lt;-</span> <span class="fu">st_as_sf</span>(edna_site, <span class="at">coords =</span> <span class="fu">c</span>(<span class="st">"Long"</span>, <span class="st">"Lat"</span>), <span class="at">crs =</span> <span class="dv">4326</span>) <span class="sc">%&gt;%</span> <span class="fu">st_transform</span>(<span class="dv">3112</span>)</span>
+<span id="cb23-38"><a href="#cb23-38" aria-hidden="true" tabindex="-1"></a>cull_sf <span class="ot">&lt;-</span> cull <span class="sc">%&gt;%</span></span>
+<span id="cb23-39"><a href="#cb23-39" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(Longitude), <span class="sc">!</span><span class="fu">is.na</span>(Latitude)) <span class="sc">%&gt;%</span></span>
+<span id="cb23-40"><a href="#cb23-40" aria-hidden="true" tabindex="-1"></a>    <span class="fu">st_as_sf</span>(<span class="at">coords =</span> <span class="fu">c</span>(<span class="st">"Longitude"</span>, <span class="st">"Latitude"</span>), <span class="at">crs =</span> <span class="dv">4326</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb23-41"><a href="#cb23-41" aria-hidden="true" tabindex="-1"></a>    <span class="fu">st_transform</span>(<span class="dv">3112</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</div>
+<p>We generate buffers drawn iteratively radially outward (<code>200m, 500m, 1km, 2km</code>), isolate matching Culls occurring inside those rings within a 6-month prior trace window, and test CPUE prediction capabilities over regimes.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>buffer_radii <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">200</span>, <span class="dv">500</span>, <span class="dv">1000</span>, <span class="dv">2000</span>)</span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>spatial_results <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (dist_m <span class="cf">in</span> buffer_radii) {</span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Radial expansion around each eDNA point</span></span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>    edna_buf <span class="ot">&lt;-</span> <span class="fu">st_buffer</span>(edna_sf, <span class="at">dist =</span> dist_m)</span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Isolate Cull coordinates bounding inside the circle</span></span>
+<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a>    intersect_cull <span class="ot">&lt;-</span> <span class="fu">st_join</span>(edna_buf, cull_sf, <span class="at">join =</span> st_intersects) <span class="sc">%&gt;%</span></span>
+<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a>        <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(date_cull))</span>
+<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Constrain to 6 month temporal overlaps</span></span>
+<span id="cb24-13"><a href="#cb24-13" aria-hidden="true" tabindex="-1"></a>    valid_encounters <span class="ot">&lt;-</span> intersect_cull <span class="sc">%&gt;%</span></span>
+<span id="cb24-14"><a href="#cb24-14" aria-hidden="true" tabindex="-1"></a>        <span class="fu">mutate</span>(<span class="at">diff_days =</span> <span class="fu">as.numeric</span>(date_cull <span class="sc">-</span> date_edna)) <span class="sc">%&gt;%</span></span>
+<span id="cb24-15"><a href="#cb24-15" aria-hidden="true" tabindex="-1"></a>        <span class="fu">filter</span>(diff_days <span class="sc">&gt;=</span> <span class="dv">0</span> <span class="sc">&amp;</span> diff_days <span class="sc">&lt;=</span> <span class="dv">183</span>)</span>
+<span id="cb24-16"><a href="#cb24-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-17"><a href="#cb24-17" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Collapse cull metadata back onto the respective eDNA Site ID</span></span>
+<span id="cb24-18"><a href="#cb24-18" aria-hidden="true" tabindex="-1"></a>    site_cpue <span class="ot">&lt;-</span> valid_encounters <span class="sc">%&gt;%</span></span>
+<span id="cb24-19"><a href="#cb24-19" aria-hidden="true" tabindex="-1"></a>        <span class="fu">st_drop_geometry</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb24-20"><a href="#cb24-20" aria-hidden="true" tabindex="-1"></a>        <span class="fu">rename</span>(<span class="fu">any_of</span>(<span class="fu">c</span>(<span class="at">Reef =</span> <span class="st">"Reef.x"</span>, <span class="at">Year =</span> <span class="st">"Year.x"</span>))) <span class="sc">%&gt;%</span></span>
+<span id="cb24-21"><a href="#cb24-21" aria-hidden="true" tabindex="-1"></a>        <span class="fu">group_by</span>(Reef, Site_name, Year, regime, perc_pos) <span class="sc">%&gt;%</span></span>
+<span id="cb24-22"><a href="#cb24-22" aria-hidden="true" tabindex="-1"></a>        <span class="fu">summarise</span>(</span>
+<span id="cb24-23"><a href="#cb24-23" aria-hidden="true" tabindex="-1"></a>            <span class="at">counts =</span> <span class="fu">sum</span>(Cohort1 <span class="sc">+</span> Cohort2 <span class="sc">+</span> Cohort3 <span class="sc">+</span> Cohort4, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb24-24"><a href="#cb24-24" aria-hidden="true" tabindex="-1"></a>            <span class="at">total_bottom =</span> <span class="fu">sum</span>(Bottomtime, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb24-25"><a href="#cb24-25" aria-hidden="true" tabindex="-1"></a>            <span class="at">.groups =</span> <span class="st">"drop"</span></span>
+<span id="cb24-26"><a href="#cb24-26" aria-hidden="true" tabindex="-1"></a>        ) <span class="sc">%&gt;%</span></span>
+<span id="cb24-27"><a href="#cb24-27" aria-hidden="true" tabindex="-1"></a>        <span class="fu">mutate</span>(</span>
+<span id="cb24-28"><a href="#cb24-28" aria-hidden="true" tabindex="-1"></a>            <span class="at">cpue =</span> counts <span class="sc">/</span> total_bottom,</span>
+<span id="cb24-29"><a href="#cb24-29" aria-hidden="true" tabindex="-1"></a>            <span class="at">radius =</span> <span class="fu">paste0</span>(dist_m, <span class="st">"m Radius"</span>)</span>
+<span id="cb24-30"><a href="#cb24-30" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb24-31"><a href="#cb24-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-32"><a href="#cb24-32" aria-hidden="true" tabindex="-1"></a>    spatial_results[[<span class="fu">as.character</span>(dist_m)]] <span class="ot">&lt;-</span> site_cpue</span>
+<span id="cb24-33"><a href="#cb24-33" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb24-34"><a href="#cb24-34" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-35"><a href="#cb24-35" aria-hidden="true" tabindex="-1"></a>df_spatial <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(spatial_results) <span class="sc">%&gt;%</span></span>
+<span id="cb24-36"><a href="#cb24-36" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">radius =</span> <span class="fu">factor</span>(radius, <span class="at">levels =</span> <span class="fu">paste0</span>(buffer_radii, <span class="st">"m Radius"</span>)))</span>
+<span id="cb24-37"><a href="#cb24-37" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-38"><a href="#cb24-38" aria-hidden="true" tabindex="-1"></a><span class="co"># Run CV Threshold tuning evaluating spatial density bounds</span></span>
+<span id="cb24-39"><a href="#cb24-39" aria-hidden="true" tabindex="-1"></a><span class="co"># We evaluate both 0.04 and 0.02 CPUE Targets, using unified global thresholds per radius.</span></span>
+<span id="cb24-40"><a href="#cb24-40" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-41"><a href="#cb24-41" aria-hidden="true" tabindex="-1"></a>res_04 <span class="ot">&lt;-</span> <span class="fu">evaluate_unified_spatial</span>(df_spatial, <span class="fl">0.04</span>, <span class="fu">seq</span>(<span class="dv">0</span>, <span class="dv">100</span>, <span class="at">by =</span> <span class="dv">5</span>))</span>
+<span id="cb24-42"><a href="#cb24-42" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">is.null</span>(res_04)) {</span>
+<span id="cb24-43"><a href="#cb24-43" aria-hidden="true" tabindex="-1"></a>    p_spatial_04 <span class="ot">&lt;-</span> res_04<span class="sc">$</span>p</span>
+<span id="cb24-44"><a href="#cb24-44" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span>(p_spatial_04)</span>
+<span id="cb24-45"><a href="#cb24-45" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>NULL</code></pre>
+</div>
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a>res_02 <span class="ot">&lt;-</span> <span class="fu">evaluate_unified_spatial</span>(df_spatial, <span class="fl">0.02</span>, <span class="fu">seq</span>(<span class="dv">0</span>, <span class="dv">100</span>, <span class="at">by =</span> <span class="dv">5</span>))</span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">is.null</span>(res_02)) {</span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>    p_spatial_02 <span class="ot">&lt;-</span> res_02<span class="sc">$</span>p</span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span>(p_spatial_02)</span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>NULL</code></pre>
+</div>
+</div>
+<section id="interpretation-of-spatial-validation-metrics" class="level3">
+<h3 class="anchored" data-anchor-id="interpretation-of-spatial-validation-metrics">Interpretation of Spatial Validation Metrics</h3>
+<p>To comprehensively evaluate how effectively explicit geographic thresholds constrain eDNA predictive capabilities, we calculate several rigorous statistical classifications:</p>
+<ul>
+<li><strong>True Positive Rate (TPR) / Sensitivity</strong>: The proportion of strictly validated COTS occurrences (<code>CPUE &gt;= Target</code>) that the eDNA signal correctly bounded. A high sensitivity guarantees we rarely miss active physical outbreaks.</li>
+<li><strong>False Positive Rate (FPR)</strong>: The proportion of strictly negative or safe sites (<code>CPUE &lt; Target</code>) that triggered a false alarm on the eDNA index. Lower is structurally better to limit wasted physical deployment sweeps.</li>
+<li><strong>Precision</strong>: When the algorithm <em>does</em> indicate a COTS outbreak based on <code>% Pos</code>, what percentage of the time was it structurally correct natively? High precision binds deployment efficiency.</li>
+<li><strong>F1 Score</strong>: The harmonized harmonic mean between Precision and Sensitivity. Given the inherent complexities of mapping fragmented temporal overlap grids into strict metric bounds, the models optimized explicitly towards max <code>F1</code> to balance outbreak responsiveness securely alongside environmental noise.</li>
+</ul>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb28"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a>metrics_list <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="fu">exists</span>(<span class="st">"res_04"</span>) <span class="sc">&amp;&amp;</span> <span class="sc">!</span><span class="fu">is.null</span>(res_04)) metrics_list[[<span class="st">"0.04"</span>]] <span class="ot">&lt;-</span> res_04<span class="sc">$</span>cm</span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="fu">exists</span>(<span class="st">"res_02"</span>) <span class="sc">&amp;&amp;</span> <span class="sc">!</span><span class="fu">is.null</span>(res_02)) metrics_list[[<span class="st">"0.02"</span>]] <span class="ot">&lt;-</span> res_02<span class="sc">$</span>cm</span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="fu">length</span>(metrics_list) <span class="sc">&gt;</span> <span class="dv">0</span>) {</span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>    df_metrics <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(metrics_list, <span class="at">.id =</span> <span class="st">"CPUE"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a>        <span class="fu">mutate</span>(<span class="at">class =</span> <span class="fu">case_when</span>(</span>
+<span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a>            pred <span class="sc">==</span> <span class="st">"Pred +"</span> <span class="sc">&amp;</span> actual <span class="sc">==</span> <span class="st">"Actual +"</span> <span class="sc">~</span> <span class="st">"TP"</span>,</span>
+<span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a>            pred <span class="sc">==</span> <span class="st">"Pred +"</span> <span class="sc">&amp;</span> actual <span class="sc">==</span> <span class="st">"Actual -"</span> <span class="sc">~</span> <span class="st">"FP"</span>,</span>
+<span id="cb28-10"><a href="#cb28-10" aria-hidden="true" tabindex="-1"></a>            pred <span class="sc">==</span> <span class="st">"Pred -"</span> <span class="sc">&amp;</span> actual <span class="sc">==</span> <span class="st">"Actual +"</span> <span class="sc">~</span> <span class="st">"FN"</span>,</span>
+<span id="cb28-11"><a href="#cb28-11" aria-hidden="true" tabindex="-1"></a>            pred <span class="sc">==</span> <span class="st">"Pred -"</span> <span class="sc">&amp;</span> actual <span class="sc">==</span> <span class="st">"Actual -"</span> <span class="sc">~</span> <span class="st">"TN"</span></span>
+<span id="cb28-12"><a href="#cb28-12" aria-hidden="true" tabindex="-1"></a>        )) <span class="sc">%&gt;%</span></span>
+<span id="cb28-13"><a href="#cb28-13" aria-hidden="true" tabindex="-1"></a>        dplyr<span class="sc">::</span><span class="fu">select</span>(CPUE, radius, regime, perc_star, class, n) <span class="sc">%&gt;%</span></span>
+<span id="cb28-14"><a href="#cb28-14" aria-hidden="true" tabindex="-1"></a>        <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> class, <span class="at">values_from =</span> n, <span class="at">values_fill =</span> <span class="fu">list</span>(<span class="at">n =</span> <span class="dv">0</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb28-15"><a href="#cb28-15" aria-hidden="true" tabindex="-1"></a>        <span class="fu">mutate</span>(</span>
+<span id="cb28-16"><a href="#cb28-16" aria-hidden="true" tabindex="-1"></a>            <span class="at">TPR =</span> TP <span class="sc">/</span> (TP <span class="sc">+</span> FN <span class="sc">+</span> <span class="fl">1e-9</span>),</span>
+<span id="cb28-17"><a href="#cb28-17" aria-hidden="true" tabindex="-1"></a>            <span class="at">Sensitivity =</span> TPR,</span>
+<span id="cb28-18"><a href="#cb28-18" aria-hidden="true" tabindex="-1"></a>            <span class="at">FPR =</span> FP <span class="sc">/</span> (FP <span class="sc">+</span> TN <span class="sc">+</span> <span class="fl">1e-9</span>),</span>
+<span id="cb28-19"><a href="#cb28-19" aria-hidden="true" tabindex="-1"></a>            <span class="at">Precision =</span> TP <span class="sc">/</span> (TP <span class="sc">+</span> FP <span class="sc">+</span> <span class="fl">1e-9</span>),</span>
+<span id="cb28-20"><a href="#cb28-20" aria-hidden="true" tabindex="-1"></a>            <span class="at">F1 =</span> <span class="dv">2</span> <span class="sc">*</span> (Precision <span class="sc">*</span> TPR) <span class="sc">/</span> (Precision <span class="sc">+</span> TPR <span class="sc">+</span> <span class="fl">1e-9</span>)</span>
+<span id="cb28-21"><a href="#cb28-21" aria-hidden="true" tabindex="-1"></a>        ) <span class="sc">%&gt;%</span></span>
+<span id="cb28-22"><a href="#cb28-22" aria-hidden="true" tabindex="-1"></a>        <span class="fu">arrange</span>(CPUE, radius, regime) <span class="sc">%&gt;%</span></span>
+<span id="cb28-23"><a href="#cb28-23" aria-hidden="true" tabindex="-1"></a>        dplyr<span class="sc">::</span><span class="fu">select</span>(</span>
+<span id="cb28-24"><a href="#cb28-24" aria-hidden="true" tabindex="-1"></a>            CPUE,</span>
+<span id="cb28-25"><a href="#cb28-25" aria-hidden="true" tabindex="-1"></a>            <span class="at">Radius =</span> radius, <span class="at">Regime =</span> regime, <span class="st">`</span><span class="at">% Pos Target</span><span class="st">`</span> <span class="ot">=</span> perc_star,</span>
+<span id="cb28-26"><a href="#cb28-26" aria-hidden="true" tabindex="-1"></a>            TPR, FPR, Sensitivity, Precision, F1</span>
+<span id="cb28-27"><a href="#cb28-27" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb28-28"><a href="#cb28-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-29"><a href="#cb28-29" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Expose the formatted statistics natively inside the rendered workflow</span></span>
+<span id="cb28-30"><a href="#cb28-30" aria-hidden="true" tabindex="-1"></a>    df_metrics <span class="sc">%&gt;%</span></span>
+<span id="cb28-31"><a href="#cb28-31" aria-hidden="true" tabindex="-1"></a>        <span class="fu">mutate</span>(<span class="fu">across</span>(<span class="fu">c</span>(TPR, FPR, Sensitivity, Precision, F1), <span class="sc">~</span> <span class="fu">round</span>(.x, <span class="dv">3</span>))) <span class="sc">%&gt;%</span></span>
+<span id="cb28-32"><a href="#cb28-32" aria-hidden="true" tabindex="-1"></a>        knitr<span class="sc">::</span><span class="fu">kable</span>(<span class="at">caption =</span> <span class="st">"Site-Level Performance Statistics bounded by Spatial Extents &amp; Regimes"</span>)</span>
+<span id="cb28-33"><a href="#cb28-33" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<caption>Site-Level Performance Statistics bounded by Spatial Extents &amp; Regimes</caption>
+<colgroup>
+<col style="width: 5%">
+<col style="width: 15%">
+<col style="width: 15%">
+<col style="width: 15%">
+<col style="width: 7%">
+<col style="width: 7%">
+<col style="width: 14%">
+<col style="width: 11%">
+<col style="width: 7%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">CPUE</th>
+<th style="text-align: left;">Radius</th>
+<th style="text-align: left;">Regime</th>
+<th style="text-align: right;">% Pos Target</th>
+<th style="text-align: right;">TPR</th>
+<th style="text-align: right;">FPR</th>
+<th style="text-align: right;">Sensitivity</th>
+<th style="text-align: right;">Precision</th>
+<th style="text-align: right;">F1</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">0.02</td>
+<td style="text-align: left;">1000m Radius</td>
+<td style="text-align: left;">3x12 Density</td>
+<td style="text-align: right;">60</td>
+<td style="text-align: right;">0.947</td>
+<td style="text-align: right;">0.404</td>
+<td style="text-align: right;">0.947</td>
+<td style="text-align: right;">0.720</td>
+<td style="text-align: right;">0.818</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">0.02</td>
+<td style="text-align: left;">1000m Radius</td>
+<td style="text-align: left;">4x6 Density</td>
+<td style="text-align: right;">60</td>
+<td style="text-align: right;">0.714</td>
+<td style="text-align: right;">0.286</td>
+<td style="text-align: right;">0.714</td>
+<td style="text-align: right;">0.625</td>
+<td style="text-align: right;">0.667</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">0.02</td>
+<td style="text-align: left;">2000m Radius</td>
+<td style="text-align: left;">3x12 Density</td>
+<td style="text-align: right;">50</td>
+<td style="text-align: right;">0.855</td>
+<td style="text-align: right;">0.508</td>
+<td style="text-align: right;">0.855</td>
+<td style="text-align: right;">0.696</td>
+<td style="text-align: right;">0.768</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">0.02</td>
+<td style="text-align: left;">2000m Radius</td>
+<td style="text-align: left;">4x6 Density</td>
+<td style="text-align: right;">50</td>
+<td style="text-align: right;">0.900</td>
+<td style="text-align: right;">0.100</td>
+<td style="text-align: right;">0.900</td>
+<td style="text-align: right;">0.900</td>
+<td style="text-align: right;">0.900</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">0.02</td>
+<td style="text-align: left;">200m Radius</td>
+<td style="text-align: left;">3x12 Density</td>
+<td style="text-align: right;">55</td>
+<td style="text-align: right;">0.905</td>
+<td style="text-align: right;">0.364</td>
+<td style="text-align: right;">0.905</td>
+<td style="text-align: right;">0.826</td>
+<td style="text-align: right;">0.864</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">0.02</td>
+<td style="text-align: left;">200m Radius</td>
+<td style="text-align: left;">4x6 Density</td>
+<td style="text-align: right;">55</td>
+<td style="text-align: right;">1.000</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">1.000</td>
+<td style="text-align: right;">1.000</td>
+<td style="text-align: right;">1.000</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">0.02</td>
+<td style="text-align: left;">500m Radius</td>
+<td style="text-align: left;">3x12 Density</td>
+<td style="text-align: right;">50</td>
+<td style="text-align: right;">0.958</td>
+<td style="text-align: right;">0.543</td>
+<td style="text-align: right;">0.958</td>
+<td style="text-align: right;">0.708</td>
+<td style="text-align: right;">0.814</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">0.02</td>
+<td style="text-align: left;">500m Radius</td>
+<td style="text-align: left;">4x6 Density</td>
+<td style="text-align: right;">50</td>
+<td style="text-align: right;">0.917</td>
+<td style="text-align: right;">0.267</td>
+<td style="text-align: right;">0.917</td>
+<td style="text-align: right;">0.733</td>
+<td style="text-align: right;">0.815</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">0.04</td>
+<td style="text-align: left;">1000m Radius</td>
+<td style="text-align: left;">3x12 Density</td>
+<td style="text-align: right;">85</td>
+<td style="text-align: right;">0.765</td>
+<td style="text-align: right;">0.240</td>
+<td style="text-align: right;">0.765</td>
+<td style="text-align: right;">0.591</td>
+<td style="text-align: right;">0.667</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">0.04</td>
+<td style="text-align: left;">1000m Radius</td>
+<td style="text-align: left;">4x6 Density</td>
+<td style="text-align: right;">85</td>
+<td style="text-align: right;">0.333</td>
+<td style="text-align: right;">0.130</td>
+<td style="text-align: right;">0.333</td>
+<td style="text-align: right;">0.571</td>
+<td style="text-align: right;">0.421</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">0.04</td>
+<td style="text-align: left;">2000m Radius</td>
+<td style="text-align: left;">3x12 Density</td>
+<td style="text-align: right;">65</td>
+<td style="text-align: right;">0.895</td>
+<td style="text-align: right;">0.481</td>
+<td style="text-align: right;">0.895</td>
+<td style="text-align: right;">0.400</td>
+<td style="text-align: right;">0.553</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">0.04</td>
+<td style="text-align: left;">2000m Radius</td>
+<td style="text-align: left;">4x6 Density</td>
+<td style="text-align: right;">65</td>
+<td style="text-align: right;">0.687</td>
+<td style="text-align: right;">0.250</td>
+<td style="text-align: right;">0.687</td>
+<td style="text-align: right;">0.647</td>
+<td style="text-align: right;">0.667</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">0.04</td>
+<td style="text-align: left;">200m Radius</td>
+<td style="text-align: left;">3x12 Density</td>
+<td style="text-align: right;">95</td>
+<td style="text-align: right;">0.700</td>
+<td style="text-align: right;">0.136</td>
+<td style="text-align: right;">0.700</td>
+<td style="text-align: right;">0.700</td>
+<td style="text-align: right;">0.700</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">0.04</td>
+<td style="text-align: left;">200m Radius</td>
+<td style="text-align: left;">4x6 Density</td>
+<td style="text-align: right;">95</td>
+<td style="text-align: right;">0.750</td>
+<td style="text-align: right;">0.000</td>
+<td style="text-align: right;">0.750</td>
+<td style="text-align: right;">1.000</td>
+<td style="text-align: right;">0.857</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">0.04</td>
+<td style="text-align: left;">500m Radius</td>
+<td style="text-align: left;">3x12 Density</td>
+<td style="text-align: right;">85</td>
+<td style="text-align: right;">0.750</td>
+<td style="text-align: right;">0.273</td>
+<td style="text-align: right;">0.750</td>
+<td style="text-align: right;">0.583</td>
+<td style="text-align: right;">0.656</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">0.04</td>
+<td style="text-align: left;">500m Radius</td>
+<td style="text-align: left;">4x6 Density</td>
+<td style="text-align: right;">85</td>
+<td style="text-align: right;">0.400</td>
+<td style="text-align: right;">0.118</td>
+<td style="text-align: right;">0.400</td>
+<td style="text-align: right;">0.667</td>
+<td style="text-align: right;">0.500</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+        const codeEl = trigger.previousElementSibling.cloneNode(true);
+        for (const childEl of codeEl.children) {
+          if (isCodeAnnotation(childEl)) {
+            childEl.remove();
+          }
+        }
+        return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

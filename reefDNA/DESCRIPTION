@@ -1,0 +1,28 @@
+Package: reefDNA
+Title: Analytical and Spatial Tools for eDNA COTS Assessment
+Version: 0.1.0
+Authors@R: 
+    person("Sam", "Matthews", , "sam@example.com", role = c("aut", "cre"))
+Description: Provides a suite of functions designed for analyzing coral reef survey data, evaluating eDNA efficacy against CPUE Manta Tow surveys, and processing data.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Imports: 
+    dplyr,
+    ggplot2,
+    tidyr,
+    broom,
+    fuzzyjoin,
+    glmmTMB,
+    rsample,
+    purrr,
+    scales,
+    readxl,
+    readr,
+    lubridate,
+    stringr
+Suggests: 
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
