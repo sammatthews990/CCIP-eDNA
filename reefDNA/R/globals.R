@@ -11,5 +11,12 @@ utils::globalVariables(c(
   "conc_mean", "conc_mean_star", "conc_t", "conc_t_star", "cpue", "date_cull",
   "date_edna", "eDNA_Positives", "grp", "horizon", "id2", "label", "lbl", "m",
   "out", "perc_pos", "perc_star", "perc_thresh", "pred", "radius", "regime",
-  "row_prop", "splits", "total_bottom", "total_cots", "n", "Date", "Lat", "Long"
+  "row_prop", "splits", "total_bottom", "total_cots", "n", "Date", "Lat", "Long",
+  "avg_hrs_saved_per_reef", "avg_fn_rate_per_reef", "gross_dollars_per_reef",
+  "net_dollars_per_reef", "scaled_hrs_saved", "scaled_gross_savings",
+  "scaled_edna_cost", "scaled_net_savings", "scaled_fn_count",
+  "is_true_negative", "net_saved_hrs", "is_false_negative",
+  "CullSiteName", "closed", "ever_above_threshold", "initial_density_class",
+  "max_density_class", "initial_cpue", "max_cpue", "last_cpue", "total_hrs",
+  "n_dives", "first_date", "last_date", "n_closed"
 ))

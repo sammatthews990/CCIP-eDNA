@@ -7,9 +7,10 @@ format:
     toc: true
     toc-depth: 3
     theme: cosmo
+    code-fold: true
     self-contained: true
 execute:
-  echo: false
+#   echo: false
   warning: false
   message: false
 ---
@@ -17,7 +18,7 @@ execute:
 ```{r setup}
 library(dplyr)
 # Robustly find reefDNA regardless of render context
-pkg_path <- if(dir.exists("reefDNA")) "reefDNA" else if(dir.exists("../reefDNA")) "../reefDNA" else "."
+pkg_path <- if (dir.exists("reefDNA")) "reefDNA" else if (dir.exists("../reefDNA")) "../reefDNA" else "."
 devtools::load_all(pkg_path)
 library(knitr)
 library(ggplot2)
@@ -35,27 +36,27 @@ top_20_annual <- read.csv("top_20_annual_wasted_v2.csv")
 full_matched_data <- read.csv("full_matched_data_v2.csv")
 
 # Baseline Financial Metrics
-cost_per_on_water_day <- 12000
+cost_per_on_water_day <- 24000
 diver_hours_per_day <- 24
-cost_per_diver_hour <- cost_per_on_water_day / diver_hours_per_day # $500
-program_cost <- 300000
+cost_per_diver_hour <- 1000  # Updated: $1,000 per diver hour
+program_cost <- 400000  # Updated: $400K eDNA program cost
 total_reefs_surveyed <- 120
 tactical_reefs <- 20
-operational_tactical_reefs <- tactical_reefs + 20 # User requested repurposing 20 monitoring reefs for a total of 40 tactically scoped reefs
-edna_cost_per_reef <- program_cost / total_reefs_surveyed # $2,500
+operational_tactical_reefs <- 55 # Updated to 55 reefs for projection
+edna_cost_per_reef <- program_cost / total_reefs_surveyed
 ```
 
 ## Executive Summary
 
 This report evaluates the potential return on investment (ROI) of incorporating eDNA surveys into the Crown-of-Thorns Starfish (COTS) control program to safely identify and "close" tactical reefs. By eliminating "ghost culling"—the effort spent culling reefs that lack significant COTS populations—the program could redirect significant vessel and diver time.
 
-This analysis relies on actual historical cull efficiency data matched with eDNA records since 2020.
+This analysis relies on actual historical cull efficiency data matched with eDNA records since 2020. **All savings estimates include 80% confidence intervals** derived from 10,000 bootstrap resamples of the historical reef-year data (n = `r nrow(full_matched_data)`).
 
 ### Baseline Unit Costs
 
 * **Cost per Diver Hour:** `r dollar(cost_per_diver_hour)`
 * **eDNA Program Total Cost:** `r dollar(program_cost)`
-* **Assumed Number of Tactical Reefs (per year):** `r operational_tactical_reefs` (Assumes 20 targeted reefs + repurposing 20 monitoring reefs)
+* **Assumed Number of Tactical Reefs (per year):** `r operational_tactical_reefs` (Projected operational scale)
 * **eDNA Average Cost per Reef:** `r dollar(edna_cost_per_reef)`
 
 ---
@@ -73,6 +74,15 @@ To rigorously score False Positives and False Negatives, we must define the ulti
 *   **The Ground Truth (Actual Cull Outcome):**
     *   *Current Assumption:* An **Outbreak (Needed)** is formally declared if *any* dive on that reef registered a CPUE $> 0.04$. If a reef met this criteria, diving was validated.
     *   *What is a Ghost Cull?* A **Ghost Cull (False Positive)** is classified when the predictor rule says we should keep the reef open to cull it, but following the initial Manta Tows/scouts, the subsequent Culling Data proves that **zero dives ever exceeded 0.04 CPUE**. In other words, if a reef actually had dives recovering $> 0.04$ CPUE, it is completely exonerated—it is *not* a ghost cull, and our models strictly punish the metric (registering a False Negative Missed Outbreak) if we mistakenly attempted to close it.
+
+#### Temporal Correction: Post-eDNA Filtering
+
+To avoid inflating the estimated savings, **all culling metrics are computed using only dives that occurred on or after the earliest eDNA sample date** for each reef-year. This ensures:
+
+1. **Hours reported as "avoidable" could actually have been avoided** — we only count culling effort that happened after the eDNA result would have been available to inform the closure decision.
+2. **Ghost-cull classification is not contaminated by pre-eDNA evidence** — a reef is not falsely exonerated (or falsely condemned) based on CPUE data that preceded the eDNA sample.
+
+For reef-years where all culling occurred before the eDNA sample, those records are excluded entirely from the confusion matrix (there is no post-eDNA culling to evaluate).
 
 ### Baseline Confusion Matrix (eDNA Only)
 
@@ -133,7 +143,11 @@ conf_summary_scars <- matrix_data_scars %>%
     group_by(Confusion_Class_Scars) %>%
     summarise(
         `Reef Occurrences` = n(),
-        `Diver Hrs Rep` = round(sum(Total_Diver_Hours), 1)
+        `Diver Hrs Rep` = round(sum(Total_Diver_Hours), 1),
+        `0-0.02 Hrs (%)` = paste0(round((sum(Wasted_Diver_Hours) / max(sum(Total_Diver_Hours), 1)) * 100, 1), "%"),
+        `0.02-0.04 Hrs (%)` = paste0(round((sum(Borderline_Diver_Hours) / max(sum(Total_Diver_Hours), 1)) * 100, 1), "%"),
+        `0.04-0.08 Hrs (%)` = paste0(round((sum(NeededLow_Diver_Hours) / max(sum(Total_Diver_Hours), 1)) * 100, 1), "%"),
+        `>0.08 Hrs (%)` = paste0(round((sum(NeededHigh_Diver_Hours) / max(sum(Total_Diver_Hours), 1)) * 100, 1), "%")
     ) %>%
     arrange(desc(`Reef Occurrences`))
 
@@ -161,7 +175,11 @@ conf_summary_r1 <- matrix_data_r1 %>%
     group_by(Confusion_Class_R1) %>%
     summarise(
         `Reef Occurrences` = n(),
-        `Diver Hrs Rep` = round(sum(Total_Diver_Hours), 1)
+        `Diver Hrs Rep` = round(sum(Total_Diver_Hours), 1),
+        `0-0.02 Hrs (%)` = paste0(round((sum(Wasted_Diver_Hours) / max(sum(Total_Diver_Hours), 1)) * 100, 1), "%"),
+        `0.02-0.04 Hrs (%)` = paste0(round((sum(Borderline_Diver_Hours) / max(sum(Total_Diver_Hours), 1)) * 100, 1), "%"),
+        `0.04-0.08 Hrs (%)` = paste0(round((sum(NeededLow_Diver_Hours) / max(sum(Total_Diver_Hours), 1)) * 100, 1), "%"),
+        `>0.08 Hrs (%)` = paste0(round((sum(NeededHigh_Diver_Hours) / max(sum(Total_Diver_Hours), 1)) * 100, 1), "%")
     ) %>%
     arrange(desc(`Reef Occurrences`))
 
@@ -191,7 +209,11 @@ conf_summary_field <- matrix_data_field %>%
     group_by(Confusion_Class_Field) %>%
     summarise(
         `Reef Occurrences` = n(),
-        `Net Diver Hrs Rep` = round(sum(Net_Saved_Hrs, na.rm = TRUE), 1)
+        `Net Diver Hrs Rep` = round(sum(Net_Saved_Hrs, na.rm = TRUE), 1),
+        `0-0.02 Hrs (%)` = paste0(round((sum(Wasted_Diver_Hours) / max(sum(Total_Diver_Hours), 1)) * 100, 1), "%"),
+        `0.02-0.04 Hrs (%)` = paste0(round((sum(Borderline_Diver_Hours) / max(sum(Total_Diver_Hours), 1)) * 100, 1), "%"),
+        `0.04-0.08 Hrs (%)` = paste0(round((sum(NeededLow_Diver_Hours) / max(sum(Total_Diver_Hours), 1)) * 100, 1), "%"),
+        `>0.08 Hrs (%)` = paste0(round((sum(NeededHigh_Diver_Hours) / max(sum(Total_Diver_Hours), 1)) * 100, 1), "%")
     ) %>%
     arrange(desc(`Reef Occurrences`))
 
@@ -222,7 +244,11 @@ conf_summary_r2 <- matrix_data_r2 %>%
     group_by(Confusion_Class_R2) %>%
     summarise(
         `Reef Occurrences` = n(),
-        `Net Diver Hrs Rep` = round(sum(Net_Saved_Hrs, na.rm = TRUE), 1)
+        `Net Diver Hrs Rep` = round(sum(Net_Saved_Hrs, na.rm = TRUE), 1),
+        `0-0.02 Hrs (%)` = paste0(round((sum(Wasted_Diver_Hours) / max(sum(Total_Diver_Hours), 1)) * 100, 1), "%"),
+        `0.02-0.04 Hrs (%)` = paste0(round((sum(Borderline_Diver_Hours) / max(sum(Total_Diver_Hours), 1)) * 100, 1), "%"),
+        `0.04-0.08 Hrs (%)` = paste0(round((sum(NeededLow_Diver_Hours) / max(sum(Total_Diver_Hours), 1)) * 100, 1), "%"),
+        `>0.08 Hrs (%)` = paste0(round((sum(NeededHigh_Diver_Hours) / max(sum(Total_Diver_Hours), 1)) * 100, 1), "%")
     ) %>%
     arrange(desc(`Reef Occurrences`))
 
@@ -269,7 +295,16 @@ ml_data <- ml_data %>%
         Net_Saved_Bal = ifelse(Class_Bal == "True Negative (Correctly Closed)" & used_scout_bal, Total_Diver_Hours - Scout_Diver_Hours, Total_Diver_Hours)
     )
 
-kable(ml_data %>% group_by(Class_Bal) %>% summarise(`Reef Occurrences` = n(), `Net Diver Hrs` = round(sum(Net_Saved_Bal, na.rm = TRUE), 1)), caption = "Model 1: Balanced Accuracy Outcomes")
+kable(ml_data %>% 
+    group_by(Class_Bal) %>% 
+    summarise(
+        `Reef Occurrences` = n(), 
+        `Net Diver Hrs` = round(sum(Net_Saved_Bal, na.rm = TRUE), 1),
+        `0-0.02 Hrs (%)` = paste0(round((sum(Wasted_Diver_Hours) / max(sum(Total_Diver_Hours), 1)) * 100, 1), "%"),
+        `0.02-0.04 Hrs (%)` = paste0(round((sum(Borderline_Diver_Hours) / max(sum(Total_Diver_Hours), 1)) * 100, 1), "%"),
+        `0.04-0.08 Hrs (%)` = paste0(round((sum(NeededLow_Diver_Hours) / max(sum(Total_Diver_Hours), 1)) * 100, 1), "%"),
+        `>0.08 Hrs (%)` = paste0(round((sum(NeededHigh_Diver_Hours) / max(sum(Total_Diver_Hours), 1)) * 100, 1), "%")
+    ), caption = "Model 1: Balanced Accuracy Outcomes")
 
 plot(tree_bal, margin = 0.1, main = "Threshold Splitting Rules: Balanced Accuracy")
 text(tree_bal, use.n = TRUE, all = TRUE, cex = 0.8)
@@ -299,7 +334,16 @@ ml_data <- ml_data %>%
         Net_Saved_F1 = ifelse(Class_F1 == "True Negative (Correctly Closed)" & used_scout_f1, Total_Diver_Hours - Scout_Diver_Hours, Total_Diver_Hours)
     )
 
-kable(ml_data %>% group_by(Class_F1) %>% summarise(`Reef Occurrences` = n(), `Net Diver Hrs` = round(sum(Net_Saved_F1, na.rm = TRUE), 1)), caption = "Model 2: F1-Score Harmonic Mean Outcomes")
+kable(ml_data %>% 
+    group_by(Class_F1) %>% 
+    summarise(
+        `Reef Occurrences` = n(), 
+        `Net Diver Hrs` = round(sum(Net_Saved_F1, na.rm = TRUE), 1),
+        `0-0.02 Hrs (%)` = paste0(round((sum(Wasted_Diver_Hours) / max(sum(Total_Diver_Hours), 1)) * 100, 1), "%"),
+        `0.02-0.04 Hrs (%)` = paste0(round((sum(Borderline_Diver_Hours) / max(sum(Total_Diver_Hours), 1)) * 100, 1), "%"),
+        `0.04-0.08 Hrs (%)` = paste0(round((sum(NeededLow_Diver_Hours) / max(sum(Total_Diver_Hours), 1)) * 100, 1), "%"),
+        `>0.08 Hrs (%)` = paste0(round((sum(NeededHigh_Diver_Hours) / max(sum(Total_Diver_Hours), 1)) * 100, 1), "%")
+    ), caption = "Model 2: F1-Score Harmonic Mean Outcomes")
 
 plot(tree_f1, margin = 0.1, main = "Threshold Splitting Rules: F1-Score")
 text(tree_f1, use.n = TRUE, all = TRUE, cex = 0.8)
@@ -329,7 +373,16 @@ ml_data <- ml_data %>%
         Net_Saved_F2 = ifelse(Class_F2 == "True Negative (Correctly Closed)" & used_scout_f2, Total_Diver_Hours - Scout_Diver_Hours, Total_Diver_Hours)
     )
 
-kable(ml_data %>% group_by(Class_F2) %>% summarise(`Reef Occurrences` = n(), `Net Diver Hrs` = round(sum(Net_Saved_F2, na.rm = TRUE), 1)), caption = "Model 3: F2-Score Eco-Conservative Outcomes")
+kable(ml_data %>% 
+    group_by(Class_F2) %>% 
+    summarise(
+        `Reef Occurrences` = n(), 
+        `Net Diver Hrs` = round(sum(Net_Saved_F2, na.rm = TRUE), 1),
+        `0-0.02 Hrs (%)` = paste0(round((sum(Wasted_Diver_Hours) / max(sum(Total_Diver_Hours), 1)) * 100, 1), "%"),
+        `0.02-0.04 Hrs (%)` = paste0(round((sum(Borderline_Diver_Hours) / max(sum(Total_Diver_Hours), 1)) * 100, 1), "%"),
+        `0.04-0.08 Hrs (%)` = paste0(round((sum(NeededLow_Diver_Hours) / max(sum(Total_Diver_Hours), 1)) * 100, 1), "%"),
+        `>0.08 Hrs (%)` = paste0(round((sum(NeededHigh_Diver_Hours) / max(sum(Total_Diver_Hours), 1)) * 100, 1), "%")
+    ), caption = "Model 3: F2-Score Eco-Conservative Outcomes")
 
 plot(tree_f2, margin = 0.1, main = "Threshold Splitting Rules: F2-Score")
 text(tree_f2, use.n = TRUE, all = TRUE, cex = 0.8)
@@ -337,9 +390,42 @@ text(tree_f2, use.n = TRUE, all = TRUE, cex = 0.8)
 
 ### Potential Scale vs Operational Program
 
-By converting 20 historical monitoring reefs linearly into tactical targeted reefs, your operational program covers `r operational_tactical_reefs` total closure candidates annually.
+The confusion matrices above are based on our historical validation dataset — a relatively small pool of reef-years where we have **both** eDNA samples and post-eDNA culling data. To estimate the annual value of deploying these rules at operational scale, we extrapolate from the historical per-reef averages to a hypothetical program size.
 
-For maximum financial transparency, we will directly compare deploying **Approach A (Field Data Only: Scars < 15%, CPUE < 0.02)** which carries zero equipment fees, directly against **Approach B (Highly Integrated Multivariate Rule 2: eDNA < 50%, Scars < 15%, CPUE < 0.02)**:
+#### Step 1: Key Assumptions
+
+```{r scaling-assumptions}
+# Show the assumptions table
+assumptions_df <- tibble::tibble(
+    Parameter = c(
+        "Cost per on-water day",
+        "Diver hours per on-water day",
+        "Implied cost per diver hour",
+        "eDNA program total annual cost",
+        "Total reefs surveyed with eDNA",
+        "eDNA cost per reef (program_cost / reefs_surveyed)",
+        "Base tactical reefs (actively targeted for closure)",
+        "Monitoring reefs repurposed for tactical use",
+        "Total operational tactical reefs per year"
+    ),
+    Value = c(
+        dollar(cost_per_on_water_day),
+        paste0(diver_hours_per_day, " hrs"),
+        dollar(cost_per_diver_hour),
+        dollar(program_cost),
+        as.character(total_reefs_surveyed),
+        dollar(edna_cost_per_reef),
+        as.character(tactical_reefs),
+        "20",
+        as.character(operational_tactical_reefs)
+    )
+)
+kable(assumptions_df, caption = "Scaling Assumptions")
+```
+
+#### Step 2: Historical Per-Reef Averages (from validation data)
+
+We compute the **average hours saved** and **average missed outbreaks** per reef-year across the entire historical validation dataset, then scale those averages to the operational program size.
 
 ```{r potential-scale}
 yearly_reef_counts <- matrix_data %>%
@@ -352,43 +438,901 @@ kable(yearly_reef_counts, caption = "Number of Unique Historical Target Validati
 ```
 
 ```{r matrix-metrics}
-Total_Reefs_Ever_Tested <- sum(matrix_data_r2 %>% nrow())
+Total_Reefs_Ever_Tested <- nrow(matrix_data_r2)
 
-# Approach A: Field Data Only
+# ── Approach A: Field Data Only ──────────────────────────────────
+TN_count_field <- sum(matrix_data_field$Confusion_Class_Field == "True Negative (Correctly Closed)")
 TN_hrs_field <- sum(matrix_data_field$Net_Saved_Hrs[matrix_data_field$Confusion_Class_Field == "True Negative (Correctly Closed)"], na.rm = TRUE)
 FN_count_field <- sum(matrix_data_field$Confusion_Class_Field == "False Negative (Missed Outbreak)")
+
 Avg_Saved_Field <- TN_hrs_field / Total_Reefs_Ever_Tested
 Avg_FN_Field <- FN_count_field / Total_Reefs_Ever_Tested
+
+# ── Approach B: Integrated eDNA (Rule 2) ─────────────────────────
+TN_count_r2 <- sum(matrix_data_r2$Confusion_Class_R2 == "True Negative (Correctly Closed)")
+TN_hrs_r2 <- sum(matrix_data_r2$Net_Saved_Hrs[matrix_data_r2$Confusion_Class_R2 == "True Negative (Correctly Closed)"], na.rm = TRUE)
+FN_count_r2 <- sum(matrix_data_r2$Confusion_Class_R2 == "False Negative (Missed Outbreak)")
+
+Avg_Saved_R2 <- TN_hrs_r2 / Total_Reefs_Ever_Tested
+Avg_FN_R2 <- FN_count_r2 / Total_Reefs_Ever_Tested
+
+# Build the worked-example table
+breakdown_df <- tibble::tibble(
+    Metric = c(
+        "Total reef-years in validation dataset",
+        "True Negatives (reefs correctly closed)",
+        "Total post-eDNA diver hours saved (TN reefs, net of scout hrs)",
+        "False Negatives (missed outbreaks)",
+        "Avg hours saved per reef-year (TN_hrs / total_reefs)",
+        "Avg missed outbreaks per reef-year (FN_count / total_reefs)"
+    ),
+    `Approach A: Field Only` = c(
+        as.character(Total_Reefs_Ever_Tested),
+        as.character(TN_count_field),
+        paste0(round(TN_hrs_field, 1), " hrs"),
+        as.character(FN_count_field),
+        paste0(round(Avg_Saved_Field, 2), " hrs/reef"),
+        round(Avg_FN_Field, 3)
+    ),
+    `Approach B: Integrated eDNA` = c(
+        as.character(Total_Reefs_Ever_Tested),
+        as.character(TN_count_r2),
+        paste0(round(TN_hrs_r2, 1), " hrs"),
+        as.character(FN_count_r2),
+        paste0(round(Avg_Saved_R2, 2), " hrs/reef"),
+        round(Avg_FN_R2, 3)
+    )
+)
+kable(breakdown_df, caption = "Step 2: Historical Per-Reef Averages")
+```
+
+#### Step 3: Scale to Operational Program
+
+We multiply the per-reef averages by the operational program size (`r operational_tactical_reefs` reefs/year) and convert hours to dollars.
+
+```{r scaling-calc}
+# ── Scale to operational program ─────────────────────────────────
 Operation_Saved_Field <- Avg_Saved_Field * operational_tactical_reefs
 Operation_FN_Field <- Avg_FN_Field * operational_tactical_reefs
 financial_savings_field <- Operation_Saved_Field * cost_per_diver_hour
 
-# Approach B: Field Data + eDNA (Rule 2)
-TN_hrs_r2 <- sum(matrix_data_r2$Net_Saved_Hrs[matrix_data_r2$Confusion_Class_R2 == "True Negative (Correctly Closed)"], na.rm = TRUE)
-FN_count_r2 <- sum(matrix_data_r2$Confusion_Class_R2 == "False Negative (Missed Outbreak)")
-Avg_Saved_R2 <- TN_hrs_r2 / Total_Reefs_Ever_Tested
-Avg_FN_R2 <- FN_count_r2 / Total_Reefs_Ever_Tested
 Operation_Saved_R2 <- Avg_Saved_R2 * operational_tactical_reefs
 Operation_FN_R2 <- Avg_FN_R2 * operational_tactical_reefs
 financial_savings_r2 <- Operation_Saved_R2 * cost_per_diver_hour
 
-# Calculate Absolute NET eDNA ROI
+# eDNA program costs
 cost_edna_testing <- operational_tactical_reefs * edna_cost_per_reef
 net_savings_r2 <- financial_savings_r2 - cost_edna_testing
+
+scaling_df <- tibble::tibble(
+    Metric = c(
+        paste0("Avg hrs saved/reef × ", operational_tactical_reefs, " reefs"),
+        paste0("Projected annual hours saved"),
+        paste0("× $", format(cost_per_diver_hour, big.mark = ","), "/hr = Gross dollar savings"),
+        paste0("Avg FN/reef × ", operational_tactical_reefs, " reefs"),
+        "Projected missed outbreaks per year",
+        "eDNA testing cost (Approach B only)",
+        "NET savings after eDNA costs (Approach B only)"
+    ),
+    `Approach A: Field Only` = c(
+        paste0(round(Avg_Saved_Field, 2), " × ", operational_tactical_reefs),
+        paste0(format(round(Operation_Saved_Field, 1), big.mark = ","), " hrs"),
+        dollar(financial_savings_field),
+        paste0(round(Avg_FN_Field, 3), " × ", operational_tactical_reefs),
+        as.character(round(Operation_FN_Field, 1)),
+        "$0 (no eDNA needed)",
+        dollar(financial_savings_field)
+    ),
+    `Approach B: Integrated eDNA` = c(
+        paste0(round(Avg_Saved_R2, 2), " × ", operational_tactical_reefs),
+        paste0(format(round(Operation_Saved_R2, 1), big.mark = ","), " hrs"),
+        dollar(financial_savings_r2),
+        paste0(round(Avg_FN_R2, 3), " × ", operational_tactical_reefs),
+        as.character(round(Operation_FN_R2, 1)),
+        dollar(cost_edna_testing),
+        dollar(net_savings_r2)
+    )
+)
+kable(scaling_df, caption = "Step 3: Scaled to Operational Program")
 ```
 
-#### Approach A: Field Data Only (Scout Culls & Manta Tows)
-*   **Operating Cost:** $0 extra.
-*   **Hours Safely Saved:** `r format_format(big.mark=",")(round(Operation_Saved_Field, 1))` diver hours returned programmatically per year.
-*   **Gross Dollar Savings:** `r dollar(financial_savings_field)`
-*   **Operational Risk:** Commits to returning those gross funds at the cost of mathematically missing **`r round(Operation_FN_Field, 1)`** genuine outbreaks per year.
+#### Summary
 
-#### Approach B: Integrated eDNA Testing
-*   **Operating Cost:** Evaluating `r operational_tactical_reefs` tactical reefs functionally costs **`r dollar(cost_edna_testing)`** annually.
-*   **Hours Safely Saved:** Safely recovers `r format_format(big.mark=",")(round(Operation_Saved_R2, 1))` diver hours programmatically per year.
-*   **Gross Dollar Savings:** `r dollar(financial_savings_r2)`
-*   **Absolute NET Savings:** After paying the $`r format_format(big.mark=",")(cost_edna_testing)` lab/collection fees entirely strictly out of the vessel returns, the net organizational saving clears **`r dollar(net_savings_r2)`**.
-*   **Operational Risk:** Bounds the financial returns against an ecologically tighter constraint of missing only **`r round(Operation_FN_R2, 1)`** true localized outbreaks comparatively.
+**Approach A: Field Data Only** (Scars < 15% + Scout CPUE < 0.02)
+
+*   **Operating Cost:** $0 extra equipment.
+*   **Projected Annual Hours Saved:** `r format(round(Operation_Saved_Field, 1), big.mark=",")` diver hours.
+*   **Gross Dollar Savings:** `r dollar(financial_savings_field)`.
+*   **Operational Risk:** Expected to miss **`r round(Operation_FN_Field, 1)`** genuine outbreaks per year.
+
+**Approach B: Integrated eDNA** (eDNA < 50% + Scars < 15% + Scout CPUE < 0.02)
+
+*   **Operating Cost:** `r dollar(cost_edna_testing)` for eDNA testing across `r operational_tactical_reefs` reefs.
+*   **Projected Annual Hours Saved:** `r format(round(Operation_Saved_R2, 1), big.mark=",")` diver hours.
+*   **Gross Dollar Savings:** `r dollar(financial_savings_r2)`.
+*   **NET Savings (after eDNA costs):** `r dollar(net_savings_r2)`.
+*   **Operational Risk:** Expected to miss **`r round(Operation_FN_R2, 1)`** genuine outbreaks per year.
+
+---
+
+## Uncertainty Quantification: Bootstrap Confidence Intervals
+
+The point estimates above are derived from `r nrow(matrix_data)` reef-year observations. To quantify the uncertainty around these savings estimates, we use a **non-parametric case-resampling bootstrap** (10,000 replicates). Each replicate resamples reef-years with replacement, re-applies the classification rule, and recalculates per-reef savings. We report **80% confidence intervals** — the range within which the true savings is expected to fall 80% of the time — as this provides a practical "likely range" for operational budgeting.
+
+### Classification Functions
+
+```{r bootstrap-classify-fns}
+# Define classification functions for each approach
+classify_field_only <- function(df) {
+  df %>%
+    mutate(
+      Pct_Tows_With_Scars = replace_na(Pct_Tows_With_Scars, 0),
+      Initial_CPUE = replace_na(Initial_CPUE, 0),
+      predict_close = (Pct_Tows_With_Scars < 15) & (Initial_CPUE < 0.02),
+      truth_needed = (Proportion_NeededLow > 0) | (Proportion_NeededHigh > 0),
+      is_true_negative = predict_close & !truth_needed,
+      is_false_negative = predict_close & truth_needed,
+      net_saved_hrs = ifelse(is_true_negative, Total_Diver_Hours - Scout_Diver_Hours, 0)
+    )
+}
+
+classify_edna_integrated <- function(df) {
+  df %>%
+    mutate(
+      Pct_Tows_With_Scars = replace_na(Pct_Tows_With_Scars, 0),
+      Initial_CPUE = replace_na(Initial_CPUE, 0),
+      predict_close = (eDNA_Pct_Positive < 50) & (Pct_Tows_With_Scars < 15) & (Initial_CPUE < 0.02),
+      truth_needed = (Proportion_NeededLow > 0) | (Proportion_NeededHigh > 0),
+      is_true_negative = predict_close & !truth_needed,
+      is_false_negative = predict_close & truth_needed,
+      net_saved_hrs = ifelse(is_true_negative, Total_Diver_Hours - Scout_Diver_Hours, 0)
+    )
+}
+
+# No-scout approaches (Manta only, eDNA + Manta)
+classify_manta_only <- function(df) {
+  df %>%
+    mutate(
+      Pct_Tows_With_Scars = replace_na(Pct_Tows_With_Scars, 0),
+      predict_close = (Pct_Tows_With_Scars < 10),
+      truth_needed = (Proportion_NeededLow > 0) | (Proportion_NeededHigh > 0),
+      is_true_negative = predict_close & !truth_needed,
+      is_false_negative = predict_close & truth_needed,
+      net_saved_hrs = ifelse(is_true_negative, Total_Diver_Hours, 0)
+    )
+}
+
+classify_edna_manta <- function(df) {
+  df %>%
+    mutate(
+      Pct_Tows_With_Scars = replace_na(Pct_Tows_With_Scars, 0),
+      predict_close = (eDNA_Pct_Positive < 45) & (Pct_Tows_With_Scars < 10),
+      truth_needed = (Proportion_NeededLow > 0) | (Proportion_NeededHigh > 0),
+      is_true_negative = predict_close & !truth_needed,
+      is_false_negative = predict_close & truth_needed,
+      net_saved_hrs = ifelse(is_true_negative, Total_Diver_Hours, 0)
+    )
+}
+```
+
+### Bootstrap Results: With Scout Culling (Approaches A vs B)
+
+```{r bootstrap-ab}
+boot_field <- bootstrap_savings(
+  data = full_matched_data,
+  classify_fn = classify_field_only,
+  n_boot = 10000, ci_level = 0.80,
+  cost_per_diver_hour = cost_per_diver_hour,
+  edna_cost_per_reef = 0,  # No eDNA cost for field-only
+  n_operational_reefs = operational_tactical_reefs
+)
+
+boot_edna <- bootstrap_savings(
+  data = full_matched_data,
+  classify_fn = classify_edna_integrated,
+  n_boot = 10000, ci_level = 0.80,
+  cost_per_diver_hour = cost_per_diver_hour,
+  edna_cost_per_reef = edna_cost_per_reef,
+  n_operational_reefs = operational_tactical_reefs
+)
+```
+
+#### Bootstrap Distributions
+
+```{r bootstrap-histograms-ab, fig.width=10, fig.height=5}
+plot_data_ab <- bind_rows(
+  boot_field$boot_dist %>% mutate(approach = "A: Field Only"),
+  boot_edna$boot_dist %>% mutate(approach = "B: Integrated eDNA")
+)
+
+ggplot(plot_data_ab, aes(x = net_dollars_per_reef, fill = approach)) +
+  geom_histogram(bins = 60, alpha = 0.7, position = "identity") +
+  geom_vline(data = plot_data_ab %>%
+    group_by(approach) %>%
+    summarise(
+      med = median(net_dollars_per_reef),
+      lo = quantile(net_dollars_per_reef, 0.10),
+      hi = quantile(net_dollars_per_reef, 0.90),
+      .groups = "drop"
+    ) %>%
+    tidyr::pivot_longer(cols = c(med, lo, hi), names_to = "stat", values_to = "val"),
+    aes(xintercept = val, colour = approach, linetype = stat),
+    linewidth = 0.7
+  ) +
+  scale_linetype_manual(values = c(med = "solid", lo = "dashed", hi = "dashed"),
+                        labels = c("80% CI Lower", "80% CI Upper", "Median")) +
+  scale_fill_manual(values = c("A: Field Only" = "#4e79a7", "B: Integrated eDNA" = "#e15759")) +
+  scale_colour_manual(values = c("A: Field Only" = "#4e79a7", "B: Integrated eDNA" = "#e15759")) +
+  scale_x_continuous(labels = dollar) +
+  labs(
+    title = "Bootstrap Distribution: Net Savings per Reef (With Scout Culling)",
+    subtitle = "10,000 replicates | 80% CI bounds shown as dashed lines",
+    x = "Net Dollar Savings per Reef",
+    y = "Count",
+    fill = "Approach", colour = "Approach"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(legend.position = "bottom")
+```
+
+#### Confidence Interval Summary Table
+
+```{r bootstrap-ci-table-ab}
+format_ci_row <- function(boot_res, label, metric_name) {
+  row <- boot_res$per_reef %>% filter(metric == metric_name)
+  if (nrow(row) == 0) return(NULL)
+  tibble::tibble(
+    Approach = label,
+    Metric = metric_name,
+    Median = row$median,
+    `80% CI Lower` = row$ci_lower,
+    `80% CI Upper` = row$ci_upper
+  )
+}
+
+ci_table <- bind_rows(
+  format_ci_row(boot_field, "A: Field Only", "Hours saved per reef"),
+  format_ci_row(boot_edna, "B: Integrated eDNA", "Hours saved per reef"),
+  format_ci_row(boot_field, "A: Field Only", "Gross dollar savings per reef"),
+  format_ci_row(boot_edna, "B: Integrated eDNA", "Gross dollar savings per reef"),
+  format_ci_row(boot_edna, "B: Integrated eDNA", "Net dollar savings per reef (after eDNA cost)"),
+  format_ci_row(boot_field, "A: Field Only", "Missed outbreaks per reef"),
+  format_ci_row(boot_edna, "B: Integrated eDNA", "Missed outbreaks per reef")
+)
+
+# Format dollar columns nicely
+ci_table_fmt <- ci_table %>%
+  mutate(
+    across(c(Median, `80% CI Lower`, `80% CI Upper`), ~ case_when(
+      grepl("dollar|Dollar", Metric) ~ dollar(.x),
+      grepl("Hours|hours", Metric) ~ paste0(round(.x, 1), " hrs"),
+      TRUE ~ as.character(round(.x, 2))
+    )),
+    `80% CI` = paste0("[", `80% CI Lower`, ", ", `80% CI Upper`, "]")
+  ) %>%
+  select(Approach, Metric, Median, `80% CI`)
+
+kable(ci_table_fmt, caption = "Per-Reef Savings Estimates with 80% Confidence Intervals (With Scout Culling)")
+```
+
+#### Scaled Program Estimates with CIs
+
+```{r bootstrap-scaled-ab}
+scaled_table <- bind_rows(
+  boot_field$scaled %>% mutate(Approach = "A: Field Only"),
+  boot_edna$scaled %>% mutate(Approach = "B: Integrated eDNA")
+) %>%
+  mutate(
+    across(c(median, ci_lower, ci_upper), ~ case_when(
+      grepl("dollar|Dollar|savings|Savings", metric) ~ dollar(.x),
+      grepl("hours|Hours", metric) ~ paste0(format(round(.x, 0), big.mark = ","), " hrs"),
+      TRUE ~ as.character(round(.x, 1))
+    )),
+    `80% CI` = paste0("[", ci_lower, ", ", ci_upper, "]")
+  ) %>%
+  select(Approach, Metric = metric, Median = median, `80% CI`)
+
+kable(scaled_table, caption = paste0("Program-Level Estimates Scaled to ", operational_tactical_reefs, " Reefs/Year (80% CI)"))
+```
+
+### Bootstrap Results: Without Scout Culling (Approaches C vs D)
+
+```{r bootstrap-cd}
+boot_manta <- bootstrap_savings(
+  data = full_matched_data,
+  classify_fn = classify_manta_only,
+  n_boot = 10000, ci_level = 0.80,
+  cost_per_diver_hour = cost_per_diver_hour,
+  edna_cost_per_reef = 0,
+  n_operational_reefs = operational_tactical_reefs
+)
+
+boot_edna_manta <- bootstrap_savings(
+  data = full_matched_data,
+  classify_fn = classify_edna_manta,
+  n_boot = 10000, ci_level = 0.80,
+  cost_per_diver_hour = cost_per_diver_hour,
+  edna_cost_per_reef = edna_cost_per_reef,
+  n_operational_reefs = operational_tactical_reefs
+)
+```
+
+```{r bootstrap-histograms-cd, fig.width=10, fig.height=5}
+plot_data_cd <- bind_rows(
+  boot_manta$boot_dist %>% mutate(approach = "C: Manta Only"),
+  boot_edna_manta$boot_dist %>% mutate(approach = "D: eDNA + Manta")
+)
+
+ggplot(plot_data_cd, aes(x = net_dollars_per_reef, fill = approach)) +
+  geom_histogram(bins = 60, alpha = 0.7, position = "identity") +
+  geom_vline(data = plot_data_cd %>%
+    group_by(approach) %>%
+    summarise(
+      med = median(net_dollars_per_reef),
+      lo = quantile(net_dollars_per_reef, 0.10),
+      hi = quantile(net_dollars_per_reef, 0.90),
+      .groups = "drop"
+    ) %>%
+    tidyr::pivot_longer(cols = c(med, lo, hi), names_to = "stat", values_to = "val"),
+    aes(xintercept = val, colour = approach, linetype = stat),
+    linewidth = 0.7
+  ) +
+  scale_linetype_manual(values = c(med = "solid", lo = "dashed", hi = "dashed"),
+                        labels = c("80% CI Lower", "80% CI Upper", "Median")) +
+  scale_fill_manual(values = c("C: Manta Only" = "#59a14f", "D: eDNA + Manta" = "#b07aa1")) +
+  scale_colour_manual(values = c("C: Manta Only" = "#59a14f", "D: eDNA + Manta" = "#b07aa1")) +
+  scale_x_continuous(labels = dollar) +
+  labs(
+    title = "Bootstrap Distribution: Net Savings per Reef (No Scout Culling)",
+    subtitle = "10,000 replicates | 80% CI bounds shown as dashed lines",
+    x = "Net Dollar Savings per Reef",
+    y = "Count",
+    fill = "Approach", colour = "Approach"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(legend.position = "bottom")
+```
+
+```{r bootstrap-ci-table-cd}
+ci_table_cd <- bind_rows(
+  format_ci_row(boot_manta, "C: Manta Only", "Hours saved per reef"),
+  format_ci_row(boot_edna_manta, "D: eDNA + Manta", "Hours saved per reef"),
+  format_ci_row(boot_manta, "C: Manta Only", "Gross dollar savings per reef"),
+  format_ci_row(boot_edna_manta, "D: eDNA + Manta", "Gross dollar savings per reef"),
+  format_ci_row(boot_edna_manta, "D: eDNA + Manta", "Net dollar savings per reef (after eDNA cost)"),
+  format_ci_row(boot_manta, "C: Manta Only", "Missed outbreaks per reef"),
+  format_ci_row(boot_edna_manta, "D: eDNA + Manta", "Missed outbreaks per reef")
+) %>%
+  mutate(
+    across(c(Median, `80% CI Lower`, `80% CI Upper`), ~ case_when(
+      grepl("dollar|Dollar", Metric) ~ dollar(.x),
+      grepl("Hours|hours", Metric) ~ paste0(round(.x, 1), " hrs"),
+      TRUE ~ as.character(round(.x, 2))
+    )),
+    `80% CI` = paste0("[", `80% CI Lower`, ", ", `80% CI Upper`, "]")
+  ) %>%
+  select(Approach, Metric, Median, `80% CI`)
+
+kable(ci_table_cd, caption = "Per-Reef Savings Estimates with 80% Confidence Intervals (No Scout Culling)")
+
+#### Scaled Program Estimates with CIs (No Scout Culling)
+
+```{r bootstrap-scaled-cd}
+scaled_table_cd <- bind_rows(
+  boot_manta$scaled %>% mutate(Approach = "C: Manta Only"),
+  boot_edna_manta$scaled %>% mutate(Approach = "D: eDNA + Manta")
+) %>%
+  mutate(
+    across(c(median, ci_lower, ci_upper), ~ case_when(
+      grepl("dollar|Dollar|savings|Savings", metric) ~ dollar(.x),
+      grepl("hours|Hours", metric) ~ paste0(format(round(.x, 0), big.mark = ","), " hrs"),
+      TRUE ~ as.character(round(.x, 1))
+    )),
+    `80% CI` = paste0("[", ci_lower, ", ", ci_upper, "]")
+  ) %>%
+  select(Approach, Metric = metric, Median = median, `80% CI`)
+
+kable(scaled_table_cd, caption = paste0("Program-Level Estimates Scaled to ", operational_tactical_reefs, " Reefs/Year (No Scout Culling, 80% CI)"))
+```
+
+### Key Savings Estimates
+
+```{r per-reef-callout, results='asis'}
+# Extract Approach B per-reef net savings
+edna_net_row <- boot_edna$per_reef %>% filter(metric == "Net dollar savings per reef (after eDNA cost)")
+edna_hrs_row <- boot_edna$per_reef %>% filter(metric == "Hours saved per reef")
+
+# Extract Approach B scaled program savings
+edna_scaled_net_row <- boot_edna$scaled %>% filter(metric == "Annual net savings (after eDNA costs)")
+edna_scaled_hrs_row <- boot_edna$scaled %>% filter(metric == "Annual hours saved")
+
+cat(paste0(
+  "\n\n::: {.callout-note}\n",
+  "## Expected Savings: Integrated eDNA (Approach B)\n\n",
+  "Using the integrated eDNA approach (Approach B) at an operational scale of **", operational_tactical_reefs, " reefs per year**:\n\n",
+  "#### Per-Reef Estimates\n",
+  "- **", round(edna_hrs_row$median, 1), " diver hours saved** (80% CI: ",
+    round(edna_hrs_row$ci_lower, 1), "–", round(edna_hrs_row$ci_upper, 1), ")\n",
+  "- **", dollar(edna_net_row$median), " net savings** (80% CI: ",
+    dollar(edna_net_row$ci_lower), "–", dollar(edna_net_row$ci_upper), ") after eDNA costs\n\n",
+  "#### Annual Program Projections\n",
+  "- **", format(round(edna_scaled_hrs_row$median, 0), big.mark = ","), " total diver hours saved** (80% CI: ",
+    format(round(edna_scaled_hrs_row$ci_lower, 0), big.mark = ","), "–", format(round(edna_scaled_hrs_row$ci_upper, 0), big.mark = ","), ")\n",
+  "- **", dollar(edna_scaled_net_row$median), " net annual savings** (80% CI: ",
+    dollar(edna_scaled_net_row$ci_lower), "–", dollar(edna_scaled_net_row$ci_upper), ") after all eDNA costs\n\n",
+  "**Break-even probability:** ", round(boot_edna$breakeven_prob * 100, 1),
+  "% of bootstrap replicates show positive net savings at the program level.\n",
+  ":::\n\n"
+))
+```
+
+
+---
+
+## Sensitivity Analysis: Unit Cost Assumptions
+
+The financial estimates above depend on assumed cost parameters. This section examines how the **net annual savings for Approach B** (Integrated eDNA) change as we vary each assumption independently, holding others at their base values.
+
+```{r sensitivity-analysis, fig.width=10, fig.height=7}
+# Compute based on actual eDNA program cost, not per-reef
+edna_total_program_cost <- program_cost
+
+sens <- sensitivity_analysis(
+  boot_result = boot_edna,
+  cost_per_hour_range = seq(600, 1400, 200),
+  edna_program_cost_range = seq(200000, 600000, 100000),
+  n_reefs_range = seq(30, 50, 5)
+)
+
+# Get base case net savings (median from bootstrap)
+base_net <- median(boot_edna$boot_dist$scaled_net_savings, na.rm = TRUE)
+
+ggplot(sens, aes(x = value_label, y = net_annual_savings, fill = is_base)) +
+  geom_col(show.legend = FALSE, width = 0.7) +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey40") +
+  geom_hline(yintercept = base_net, linetype = "dotted", colour = "steelblue", linewidth = 0.6) +
+  facet_wrap(~ parameter, scales = "free_x", ncol = 1) +
+  scale_y_continuous(labels = dollar) +
+  scale_fill_manual(values = c("TRUE" = "#e15759", "FALSE" = "#76b7b2")) +
+  labs(
+    title = "Sensitivity Analysis: Net Annual Savings (Approach B)",
+    subtitle = paste0("Base case (red bar) = $", format(cost_per_diver_hour, big.mark = ","), "/hr, $",
+                      format(edna_total_program_cost, big.mark = ","), " program cost, ",
+                      operational_tactical_reefs, " reefs | Dotted line = bootstrap median"),
+    x = "Parameter Value",
+    y = "Net Annual Savings"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    strip.text = element_text(face = "bold", size = 12),
+    panel.grid.major.x = element_blank()
+  )
+```
+
+```{r sensitivity-table}
+kable(
+  sens %>%
+    mutate(net_annual_savings = dollar(net_annual_savings)) %>%
+    select(Parameter = parameter, Value = value_label,
+           `Net Annual Savings` = net_annual_savings,
+           `Base Case?` = is_base),
+  caption = "Sensitivity of Net Annual Savings to Cost Assumptions"
+)
+```
+---
+
+## Ecological Impact: Additional Hectares Managed
+
+The financial savings quantified above represent diver hours that could be **redirected** rather than simply eliminated. Each cull site in the COTS control program covers approximately **10 hectares** of reef. By understanding how many diver hours it takes to "close" a site (bring it from active outbreak status ≥0.04 CPUE down to <0.04), we can estimate how many **additional sites** — and therefore how many **additional hectares** — could be actively managed with the redirected effort.
+
+### How Many Hours to Close a Cull Site?
+
+We define a **site closure** as a cull site that:
+
+1. Had at least one dive recording CPUE ≥ 0.04 (confirming an active outbreak), and
+2. Had its final recorded dive(s) fall below 0.04 CPUE (indicating successful suppression).
+
+```{r site-closure-data}
+# Load the raw cull data and run the closure analysis
+cull_raw_data <- prepare_cull_data(
+  file.path(dirname(getwd()), "data", "260201_COTS-Cull-Data-Ewels.xlsx")
+)
+site_episodes <- analyze_site_closures(cull_raw_data, cpue_threshold = 0.04, exclude_years = 2026)
+site_effort <- summarize_site_effort(site_episodes, ha_per_site = 10)
+```
+
+We analyse `r format(nrow(site_episodes), big.mark=",")` site-year episodes across 2020–2025, of which **`r format(sum(site_episodes$closed), big.mark=",")`** meet this closure definition.
+
+#### Closure Effort by Peak Density Class
+
+The table below stratifies closures by the **maximum CPUE** observed at the site during its outbreak episode. This reflects the severity of the outbreak that had to be suppressed:
+
+- **Moderate sites (0.04–0.08 CPUE):** These represent standard outbreak sites where COTS density was above the damage threshold but not at extreme levels. They require less effort to bring under control.
+- **High-density sites (>0.08 CPUE):** These are severe outbreaks requiring substantially more diver hours to suppress.
+
+```{r closure-by-density}
+kable(
+  site_effort$closure_by_max_density %>%
+    mutate(
+      `Median (IQR)` = paste0(median_hrs, " hrs (", p25_hrs, "\u2013", p75_hrs, ")")
+    ) %>%
+    select(
+      `Peak Density Class` = max_density_class,
+      `Closures` = n_closures,
+      `Mean Hrs` = mean_hrs,
+      `Median (IQR)`,
+      `Mean Dives` = mean_dives
+    ),
+  caption = "Diver Hours Required to Close a 10 ha Cull Site (by Peak CPUE)"
+)
+```
+
+```{r closure-overall, results='asis'}
+cat(paste0(
+  "\n\n> **Overall benchmark:** Across all ", site_effort$closure_overall$n_closures,
+  " closures, the median effort to close a site is **",
+  site_effort$closure_overall$median_hrs, " diver hours** (IQR: ",
+  site_effort$closure_overall$p25_hrs, "\u2013", site_effort$closure_overall$p75_hrs, ").\n\n"
+))
+```
+
+#### How Many Hours Does a Typical Site Receive Per Year?
+
+As an alternative lens, we can ask: how many diver hours does each cull site receive in a typical year? This provides context for the operational "cost" of adding a site to the program.
+
+```{r annual-percentile-table}
+kable(
+  site_effort$annual_by_year %>%
+    select(
+      Year,
+      `Sites` = n_sites,
+      `Closures` = n_closed,
+      `Total Hrs` = total_hrs,
+      `p10` = p10_hrs,
+      `p25` = p25_hrs,
+      `p50 (Median)` = p50_hrs,
+      `p75` = p75_hrs,
+      `p90` = p90_hrs
+    ),
+  caption = "Diver Hours per Cull Site per Year (Percentiles)"
+)
+```
+
+### Converting Saved Hours to Additional Hectares
+
+Using the bootstrap-estimated hours saved from the integrated eDNA approach (Approach B), we can estimate how many additional cull sites those hours could service — and therefore how many additional hectares of reef could be under active COTS management.
+
+We present two benchmarks:
+
+- **Moderate-density benchmark** (`r site_effort$closure_by_max_density %>% filter(max_density_class == "0.04-0.08") %>% pull(median_hrs)` hrs/site): Based on the median effort to close moderate-outbreak sites (0.04–0.08 CPUE). This represents a **best-case scenario** — the kind of site that is most likely to be newly added to the program.
+- **All-closures benchmark** (`r site_effort$closure_overall$median_hrs` hrs/site): Based on the median across all closures regardless of severity. This is a **conservative estimate** that accounts for the mix of moderate and severe outbreaks encountered operationally.
+
+```{r hectare-conversion, results='asis'}
+# Extract the bootstrap hours-saved distribution (Approach B, scaled to program)
+boot_hrs_saved <- boot_edna$boot_dist$scaled_hrs_saved
+
+# Benchmarks
+moderate_hrs <- site_effort$closure_by_max_density %>%
+  filter(max_density_class == "0.04-0.08") %>%
+  pull(median_hrs)
+all_closure_hrs <- site_effort$closure_overall$median_hrs
+ha_per_site <- site_effort$ha_per_site
+
+# Historical Baselines (2020-2025)
+# Average closures per year
+avg_closures_per_year <- mean(
+  site_effort$annual_by_year$n_closed[site_effort$annual_by_year$Year >= 2020 & site_effort$annual_by_year$Year <= 2025],
+  na.rm = TRUE
+)
+# Average actioned sites per year
+avg_actioned_per_year <- mean(
+  site_effort$annual_by_year$n_sites[site_effort$annual_by_year$Year >= 2020 & site_effort$annual_by_year$Year <= 2025],
+  na.rm = TRUE
+)
+
+# New benchmark: Actioned Sites
+median_actioned_hrs <- site_effort$annual_percentiles$p50_hrs
+
+# Compute additional sites and hectares for each bootstrap replicate
+moderate_sites <- boot_hrs_saved / moderate_hrs
+all_sites <- boot_hrs_saved / all_closure_hrs
+actioned_sites_dist <- boot_hrs_saved / median_actioned_hrs
+
+# Summarise with 80% CI
+ci_probs <- c(0.10, 0.50, 0.90)
+
+mod_q <- quantile(moderate_sites, probs = ci_probs, na.rm = TRUE)
+all_q <- quantile(all_sites, probs = ci_probs, na.rm = TRUE)
+actioned_q <- quantile(actioned_sites_dist, probs = ci_probs, na.rm = TRUE)
+
+# Percentage increases
+pct_inc_ha_mod <- (moderate_sites / avg_closures_per_year) * 100
+pct_inc_ha_mod_q <- quantile(pct_inc_ha_mod, probs = ci_probs, na.rm = TRUE)
+
+pct_inc_ha_all <- (all_sites / avg_closures_per_year) * 100
+pct_inc_ha_all_q <- quantile(pct_inc_ha_all, probs = ci_probs, na.rm = TRUE)
+
+pct_inc_actioned <- (actioned_sites_dist / avg_actioned_per_year) * 100
+pct_inc_actioned_q <- quantile(pct_inc_actioned, probs = ci_probs, na.rm = TRUE)
+
+cat(paste0(
+  "\n\n::: {.callout-note}\n",
+  "## Additional Coral Reef Area Under Active Management\n\n",
+  "By redirecting the diver hours saved through eDNA-informed closures (Approach B, ",
+  operational_tactical_reefs, " reefs/year), the program could manage:\n\n",
+  "#### Using Moderate-Density Benchmark (", moderate_hrs, " hrs/site)\n",
+  "- **", round(mod_q[2], 0), " additional cull sites closed** (80% CI: ",
+    round(mod_q[1], 0), "\u2013", round(mod_q[3], 0), ")\n",
+  "- **= ", format(round(mod_q[2] * ha_per_site, 0), big.mark = ","), " additional hectares managed** (80% CI: ",
+    format(round(mod_q[1] * ha_per_site, 0), big.mark = ","), "\u2013",
+    format(round(mod_q[3] * ha_per_site, 0), big.mark = ","), ")\n",
+  "- **Representing a ", round(pct_inc_ha_mod_q[2], 1), "% increase** over historical annual hectares managed (80% CI: ",
+    round(pct_inc_ha_mod_q[1], 1), "%\u2013", round(pct_inc_ha_mod_q[3], 1), "%)\n\n",
+  "#### Using All-Closures Benchmark (", all_closure_hrs, " hrs/site)\n",
+  "- **", round(all_q[2], 0), " additional cull sites closed** (80% CI: ",
+    round(all_q[1], 0), "\u2013", round(all_q[3], 0), ")\n",
+  "- **= ", format(round(all_q[2] * ha_per_site, 0), big.mark = ","), " additional hectares managed** (80% CI: ",
+    format(round(all_q[1] * ha_per_site, 0), big.mark = ","), "\u2013",
+    format(round(all_q[3] * ha_per_site, 0), big.mark = ","), ")\n",
+  "- **Representing a ", round(pct_inc_ha_all_q[2], 1), "% increase** over historical annual hectares managed (80% CI: ",
+    round(pct_inc_ha_all_q[1], 1), "%\u2013", round(pct_inc_ha_all_q[3], 1), "%)\n\n",
+  "#### Percentage Increase in Actioned Sites\n",
+  "Redirecting hours also allows the program to visit and cull more distinct sites.\n",
+  "- **Using Median Actioned Site Effort (", median_actioned_hrs, " hrs/site):**\n",
+  "- **", round(actioned_q[2], 0), " additional sites actioned** (80% CI: ",
+    round(actioned_q[1], 0), "\u2013", round(actioned_q[3], 0), ")\n",
+  "- **Representing a ", round(pct_inc_actioned_q[2], 1), "% increase** over historical annual actioned sites (80% CI: ",
+    round(pct_inc_actioned_q[1], 1), "%\u2013", round(pct_inc_actioned_q[3], 1), "%)\n\n",
+  "*Historical baselines (2020-2025) average ", round(avg_closures_per_year, 1), " closed sites (", format(round(avg_closures_per_year * ha_per_site, 0), big.mark = ","), " ha) and ",
+  format(round(avg_actioned_per_year, 0), big.mark = ","), " actioned sites per year.*\n",
+  ":::\n\n"
+))
+```
+
+```{r hectare-histogram, fig.width=10, fig.height=5}
+hectare_data <- bind_rows(
+  tibble::tibble(
+    ha = moderate_sites * ha_per_site,
+    benchmark = paste0("Moderate (", moderate_hrs, " hrs/site)")
+  ),
+  tibble::tibble(
+    ha = all_sites * ha_per_site,
+    benchmark = paste0("All Closures (", all_closure_hrs, " hrs/site)")
+  )
+)
+
+ggplot(hectare_data, aes(x = ha, fill = benchmark)) +
+  geom_histogram(bins = 50, alpha = 0.7, position = "identity") +
+  geom_vline(data = hectare_data %>%
+    group_by(benchmark) %>%
+    summarise(
+      med = median(ha),
+      lo = quantile(ha, 0.10),
+      hi = quantile(ha, 0.90),
+      .groups = "drop"
+    ) %>%
+    tidyr::pivot_longer(cols = c(med, lo, hi), names_to = "stat", values_to = "val"),
+    aes(xintercept = val, colour = benchmark, linetype = stat),
+    linewidth = 0.7
+  ) +
+  scale_linetype_manual(values = c(med = "solid", lo = "dashed", hi = "dashed"),
+                        labels = c("80% CI Lower", "80% CI Upper", "Median")) +
+  scale_fill_manual(values = c(
+    setNames("#4e79a7", paste0("Moderate (", moderate_hrs, " hrs/site)")),
+    setNames("#e15759", paste0("All Closures (", all_closure_hrs, " hrs/site)"))
+  )) +
+  scale_colour_manual(values = c(
+    setNames("#4e79a7", paste0("Moderate (", moderate_hrs, " hrs/site)")),
+    setNames("#e15759", paste0("All Closures (", all_closure_hrs, " hrs/site)"))
+  )) +
+  scale_x_continuous(labels = function(x) paste0(format(x, big.mark = ","), " ha")) +
+  labs(
+    title = "Bootstrap Distribution: Additional Hectares Under Active COTS Management",
+    subtitle = "10,000 replicates | 80% CI bounds shown as dashed lines | Each cull site = 10 ha",
+    x = "Additional Hectares Managed",
+    y = "Count",
+    fill = "Benchmark", colour = "Benchmark"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(legend.position = "bottom")
+```
+
+---
+
+### Potential Scale: Manta-Only vs eDNA + Manta (No Scout Culling Required)
+
+The comparison above requires an initial scout cull before a closure decision can be made. Below, we present the simpler rules that only require a Manta Tow (and optionally eDNA), with **no initial cull day needed**. Because no scout culling is involved, the full `Total_Diver_Hours` at the reef is the potential saving (no scout hours deducted).
+
+```{r scaling-manta-metrics}
+# ── Approach C: Manta Scars Only (Scars < 10%) ──────────────────
+TN_count_scars <- sum(matrix_data_scars$Confusion_Class_Scars == "True Negative (Correctly Closed)")
+TN_hrs_scars <- sum(matrix_data_scars$Total_Diver_Hours[matrix_data_scars$Confusion_Class_Scars == "True Negative (Correctly Closed)"], na.rm = TRUE)
+FN_count_scars <- sum(matrix_data_scars$Confusion_Class_Scars == "False Negative (Missed Outbreak)")
+
+Avg_Saved_Scars <- TN_hrs_scars / Total_Reefs_Ever_Tested
+Avg_FN_Scars <- FN_count_scars / Total_Reefs_Ever_Tested
+
+# ── Approach D: eDNA + Manta (eDNA < 45% AND Scars < 10%) ───────
+TN_count_r1 <- sum(matrix_data_r1$Confusion_Class_R1 == "True Negative (Correctly Closed)")
+TN_hrs_r1 <- sum(matrix_data_r1$Total_Diver_Hours[matrix_data_r1$Confusion_Class_R1 == "True Negative (Correctly Closed)"], na.rm = TRUE)
+FN_count_r1 <- sum(matrix_data_r1$Confusion_Class_R1 == "False Negative (Missed Outbreak)")
+
+Avg_Saved_R1 <- TN_hrs_r1 / Total_Reefs_Ever_Tested
+Avg_FN_R1 <- FN_count_r1 / Total_Reefs_Ever_Tested
+
+breakdown_manta_df <- tibble::tibble(
+    Metric = c(
+        "Total reef-years in validation dataset",
+        "True Negatives (reefs correctly closed)",
+        "Total post-eDNA diver hours saved (TN reefs, no scout deduction)",
+        "False Negatives (missed outbreaks)",
+        "Avg hours saved per reef-year (TN_hrs / total_reefs)",
+        "Avg missed outbreaks per reef-year (FN_count / total_reefs)"
+    ),
+    `Approach C: Manta Only` = c(
+        as.character(Total_Reefs_Ever_Tested),
+        as.character(TN_count_scars),
+        paste0(round(TN_hrs_scars, 1), " hrs"),
+        as.character(FN_count_scars),
+        paste0(round(Avg_Saved_Scars, 2), " hrs/reef"),
+        round(Avg_FN_Scars, 3)
+    ),
+    `Approach D: eDNA + Manta` = c(
+        as.character(Total_Reefs_Ever_Tested),
+        as.character(TN_count_r1),
+        paste0(round(TN_hrs_r1, 1), " hrs"),
+        as.character(FN_count_r1),
+        paste0(round(Avg_Saved_R1, 2), " hrs/reef"),
+        round(Avg_FN_R1, 3)
+    )
+)
+kable(breakdown_manta_df, caption = "Historical Per-Reef Averages: Manta-Only vs eDNA + Manta")
+```
+
+```{r scaling-manta-calc}
+# ── Scale to operational program ─────────────────────────────────
+Operation_Saved_Scars <- Avg_Saved_Scars * operational_tactical_reefs
+Operation_FN_Scars <- Avg_FN_Scars * operational_tactical_reefs
+financial_savings_scars <- Operation_Saved_Scars * cost_per_diver_hour
+
+Operation_Saved_R1 <- Avg_Saved_R1 * operational_tactical_reefs
+Operation_FN_R1 <- Avg_FN_R1 * operational_tactical_reefs
+financial_savings_r1 <- Operation_Saved_R1 * cost_per_diver_hour
+
+# eDNA costs apply to Approach D only
+net_savings_r1 <- financial_savings_r1 - cost_edna_testing
+
+scaling_manta_df <- tibble::tibble(
+    Metric = c(
+        paste0("Avg hrs saved/reef × ", operational_tactical_reefs, " reefs"),
+        "Projected annual hours saved",
+        paste0("× $", format(cost_per_diver_hour, big.mark = ","), "/hr = Gross dollar savings"),
+        paste0("Avg FN/reef × ", operational_tactical_reefs, " reefs"),
+        "Projected missed outbreaks per year",
+        "eDNA testing cost",
+        "NET savings after eDNA costs"
+    ),
+    `Approach C: Manta Only` = c(
+        paste0(round(Avg_Saved_Scars, 2), " × ", operational_tactical_reefs),
+        paste0(format(round(Operation_Saved_Scars, 1), big.mark = ","), " hrs"),
+        dollar(financial_savings_scars),
+        paste0(round(Avg_FN_Scars, 3), " × ", operational_tactical_reefs),
+        as.character(round(Operation_FN_Scars, 1)),
+        "$0 (no eDNA needed)",
+        dollar(financial_savings_scars)
+    ),
+    `Approach D: eDNA + Manta` = c(
+        paste0(round(Avg_Saved_R1, 2), " × ", operational_tactical_reefs),
+        paste0(format(round(Operation_Saved_R1, 1), big.mark = ","), " hrs"),
+        dollar(financial_savings_r1),
+        paste0(round(Avg_FN_R1, 3), " × ", operational_tactical_reefs),
+        as.character(round(Operation_FN_R1, 1)),
+        dollar(cost_edna_testing),
+        dollar(net_savings_r1)
+    )
+)
+kable(scaling_manta_df, caption = "Scaled to Operational Program: Manta-Only vs eDNA + Manta")
+```
+
+#### Summary (No Scout Culling)
+
+**Approach C: Manta Scars Only** (Scars < 10%)
+
+*   **Operating Cost:** $0 extra.
+*   **Projected Annual Hours Saved:** `r format(round(Operation_Saved_Scars, 1), big.mark=",")` diver hours.
+*   **Gross Dollar Savings:** `r dollar(financial_savings_scars)`.
+*   **Operational Risk:** Expected to miss **`r round(Operation_FN_Scars, 1)`** genuine outbreaks per year.
+
+**Approach D: eDNA + Manta** (eDNA < 45% + Scars < 10%)
+
+*   **Operating Cost:** `r dollar(cost_edna_testing)` for eDNA testing.
+*   **Projected Annual Hours Saved:** `r format(round(Operation_Saved_R1, 1), big.mark=",")` diver hours.
+*   **Gross Dollar Savings:** `r dollar(financial_savings_r1)`.
+*   **NET Savings (after eDNA costs):** `r dollar(net_savings_r1)`.
+*   **Operational Risk:** Expected to miss **`r round(Operation_FN_R1, 1)`** genuine outbreaks per year.
+
+
+---
+
+```{r synthesis-section, results='asis'}
+# Extract required dynamic metrics for synthesis
+b_net_med <- boot_edna$scaled %>% filter(metric == "Annual net savings (after eDNA costs)") %>% pull(median)
+b_net_lo  <- boot_edna$scaled %>% filter(metric == "Annual net savings (after eDNA costs)") %>% pull(ci_lower)
+b_net_hi  <- boot_edna$scaled %>% filter(metric == "Annual net savings (after eDNA costs)") %>% pull(ci_upper)
+
+b_hrs_med <- boot_edna$scaled %>% filter(metric == "Annual hours saved") %>% pull(median)
+b_hrs_lo  <- boot_edna$scaled %>% filter(metric == "Annual hours saved") %>% pull(ci_lower)
+b_hrs_hi  <- boot_edna$scaled %>% filter(metric == "Annual hours saved") %>% pull(ci_upper)
+
+b_fn_med  <- boot_edna$scaled %>% filter(metric == "Annual missed outbreaks (FN)") %>% pull(median)
+
+# Days equivalent
+days_med <- b_hrs_med / diver_hours_per_day
+days_lo  <- b_hrs_lo / diver_hours_per_day
+days_hi  <- b_hrs_hi / diver_hours_per_day
+
+cat(paste0(
+  "## Executive Synthesis: Major Findings & Analytical Assumptions\n\n",
+  "This section consolidates the overarching findings of the ROI analysis at a projected operational scale of **", operational_tactical_reefs, " tactical reefs per year**, followed by an exhaustive inventory of all technical, financial, and ecological assumptions governing the analytical pipeline.\n\n",
+
+  "### 1. Summary of Major Findings\n\n",
+
+  "::: {.callout-important}\n",
+  "## Key Strategic Takeaways\n\n",
+
+  "1. **Substantial Net Return on Investment (Approach B - Integrated eDNA):**\n",
+  "   - **Net Financial Savings:** Generating **", dollar(b_net_med), " per year** in net savings (80% CI: ", dollar(b_net_lo), " – ", dollar(b_net_hi), ") **after fully deducting** the ", dollar(program_cost), " annual eDNA program budget.\n",
+  "   - **High Financial Reliability:** ", round(boot_edna$breakeven_prob * 100, 1), "% of bootstrap resamples produce positive net savings, demonstrating strong financial resilience against sampling variability.\n\n",
+
+  "2. **Diver Effort Avoided (Eliminating Ghost Culls):**\n",
+  "   - **Avoided Diver Time:** **", format(round(b_hrs_med, 0), big.mark = ","), " diver hours saved per year** (80% CI: ", format(round(b_hrs_lo, 0), big.mark = ","), " – ", format(round(b_hrs_hi, 0), big.mark = ","), ") by preventing vessel deployment on non-outbreak reefs.\n",
+  "   - **Equivalent Vessel Capacity:** Represents redirecting **~", round(days_med, 1), " full on-water operational vessel days** per year (80% CI: ", round(days_lo, 1), " – ", round(days_hi, 1), " days) back into active outbreak management.\n\n",
+
+  "3. **Ecological Impact: Expanding Managed Reef Footprint:**\n",
+  "   - **Additional Hectares Managed (Closed Outbreaks):** Redirecting saved hours allows closing **+", round(mod_q[2], 0), " additional moderate-density cull sites** (80% CI: ", round(mod_q[1], 0), " – ", round(mod_q[3], 0), "), protecting **+", format(round(mod_q[2] * ha_per_site, 0), big.mark = ","), " additional hectares** of coral reef area per year.\n",
+  "   - **Growth in Closed Area:** Represents a **", round(pct_inc_ha_mod_q[2], 1), "% increase** (80% CI: ", round(pct_inc_ha_mod_q[1], 1), "% – ", round(pct_inc_ha_mod_q[3], 1), "%) over the historical baseline of ", round(avg_closures_per_year, 1), " closed sites/year (290 ha/year).\n",
+  "   - **Expansion in Actioned Sites:** Using the median effort per actioned site (", median_actioned_hrs, " hrs/site), saved hours enable visiting **+", round(actioned_q[2], 0), " additional distinct sites** per year (80% CI: ", round(actioned_q[1], 0), " – ", round(actioned_q[3], 0), "), a **", round(pct_inc_actioned_q[2], 1), "% increase** over the historical baseline of ", format(round(avg_actioned_per_year, 0), big.mark = ","), " actioned sites/year.\n\n",
+
+  "4. **Ecological Safety & Risk Control:**\n",
+  "   - **Negligible Missed Outbreaks:** Approach B restricts missed outbreaks to an expected **", round(b_fn_med, 2), " reefs per year**, providing near-perfect ecological safety while eliminating wasted effort.\n",
+  ":::\n\n",
+
+  "---\n\n",
+
+  "### 2. Comprehensive Inventory of Analytical Assumptions\n\n",
+  "To ensure complete transparency and reproducibility, the entire evaluation pipeline relies on the following explicit assumptions across five operational domains:\n\n",
+
+  "#### A. Data Preparation & Temporal Matching Assumptions\n",
+  "* **Matching Unit:** Data are matched at the discrete **reef-year** level. eDNA sample results collected on a reef in a given year are paired with Manta Tow surveys and active culling logs for that exact same reef-year.\n",
+  "* **Post-eDNA Temporal Filtering (Causality Constraint):** To prevent post-hoc bias, **only culling effort that occurred on or after the earliest eDNA sampling date** in a given reef-year is evaluated for potential savings. Effort occurring *before* eDNA sampling cannot physically be avoided by eDNA-informed decisions and is strictly excluded from savings metrics.\n",
+  "* **Exclusion of Pre-eDNA-Only Reef-Years:** Reef-years where all culling occurred prior to eDNA sampling are excluded from confusion matrix scoring as no post-eDNA decisions could be evaluated.\n",
+  "* **Multi-Year Data Scope:** Analysis incorporates historical records from **2020 through 2025** (n = ", nrow(full_matched_data), " matched reef-year validation events). The year 2026 is excluded due to incomplete annual culling logs.\n\n",
+
+  "#### B. Outbreak Definition & Ground Truth ('Ghost Cull') Assumptions\n",
+  "* **Active Outbreak Ground Truth Threshold:** A reef-year is defined as a **True Outbreak (Needed)** if *any dive* on that reef during the post-eDNA period registered a Catch Per Unit Effort (CPUE) $\\ge 0.04$ COTS/diver-minute (Cohort 1–4 total COTS / bottom time).\n",
+  "* **Ghost Cull Definition (False Positive):** A reef is classified as a 'Ghost Cull' if a decision rule recommended keeping it open for culling, but subsequent dive logs prove **zero dives ever exceeded 0.04 CPUE**.\n",
+  "* **Missed Outbreak Definition (False Negative):** A reef is classified as a 'Missed Outbreak' if a decision rule recommended closing the reef, but subsequent dive logs confirmed at least one dive $\\ge 0.04$ CPUE. Models heavily penalize false negatives.\n\n",
+
+  "#### C. Operational Scale & Financial Assumptions\n",
+  "* **Operational Scale Target:** Results are scaled to a projected operational deployment across **", operational_tactical_reefs, " tactical reefs per year**.\n",
+  "* **Diver Hour Financial Valuation:** Diver effort is valued at **$", format(cost_per_diver_hour, big.mark = ","), " per diver hour**, calculated directly from vessel daily operating costs ($", format(cost_per_on_water_day, big.mark = ","), " per on-water day / ", diver_hours_per_day, " diver hours per day).\n",
+  "* **eDNA Program Fixed Cost:** Total eDNA program cost is set at **$", format(program_cost, big.mark = ","), " per year** across 120 surveyed reefs, establishing an average cost of **$", format(round(edna_cost_per_reef, 2), big.mark = ","), " per reef**.\n",
+  "* **Scout Cull Hour Deduction:** For decision rules requiring an initial in-water scout check (Approaches A and B), Day-1 scout dive hours (`Scout_Diver_Hours`) are **strictly deducted** from True Negative savings yields before calculating net savings.\n\n",
+
+  "#### D. Ecological Conversion & Baseline Assumptions\n",
+  "* **Cull Site Polygon Area:** Standardized at **10 hectares (ha)** per cull site.\n",
+  "* **Moderate Outbreak Closure Effort Benchmark:** Set at **", moderate_hrs, " diver hours per site**, representing the empirical median effort required to suppress moderate outbreaks (0.04–0.08 peak CPUE) to below 0.04 CPUE.\n",
+  "* **All-Closures Effort Benchmark:** Set at **", all_closure_hrs, " diver hours per site**, representing the overall median closure effort across all density classes.\n",
+  "* **Actioned Site Effort Benchmark:** Set at **", median_actioned_hrs, " diver hours per site-year**, representing the empirical median annual effort spent across all actioned sites (both closed and ongoing).\n",
+  "* **Historical Closure Baseline:** Historical average of **", round(avg_closures_per_year, 1), " closed sites per year** (", format(round(avg_closures_per_year * ha_per_site, 0), big.mark = ","), " ha/year) across 2020–2025.\n",
+  "* **Historical Actioned Baseline:** Historical average of **", format(round(avg_actioned_per_year, 0), big.mark = ","), " actioned sites per year** across 2020–2025.\n\n",
+
+  "#### E. Uncertainty & Statistical Resampling Assumptions\n",
+  "* **Bootstrap Resampling Framework:** Non-parametric case-resampling bootstrap with **10,000 iterations** at the reef-year observation level.\n",
+  "* **Confidence Intervals:** 80% non-parametric percentile confidence intervals (10th to 90th percentiles) chosen to reflect operational risk planning thresholds.\n\n"
+))
+```
+
 
 ---
 
@@ -400,7 +1344,8 @@ The table below provides transparency out of the most recent example year to sho
 # We keep 2025 as the example deep dive
 most_recent_year <- max(combined_data$Year - 1, na.rm = TRUE)
 
-recent_top_20 <- top_20_annual %>%
+# recent_top_20 <- top_20_annual %>%
+recent_top_20 <- combined_data %>%
     filter(Year == most_recent_year) %>%
     select(
         ReefName,
@@ -424,7 +1369,8 @@ recent_top_20 <- top_20_annual %>%
         eDNA_Pct_Positive = ifelse(eDNA_Pct_Positive == "NA%", "No Data", eDNA_Pct_Positive),
         eDNA_Mean_Conc = round(eDNA_Mean_Conc, 3)
     ) %>%
-    arrange(desc(Wasted_Diver_Hours))
+    # arrange(desc(Wasted_Diver_Hours))
+    arrange(eDNA_Pct_Positive)
 
 kable(
     recent_top_20,

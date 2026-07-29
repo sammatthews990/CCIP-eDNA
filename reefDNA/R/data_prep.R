@@ -127,7 +127,7 @@ summarize_manta_data <- function(manta_data) {
 #'
 #' @param edna_file Path to eDNA excel file
 #' @param sheet Sheet name, defaults to "eDNA_data_ALL"
-#' @return Summarised eDNA data per reef/year.
+#' @return Summarised eDNA data per reef/year, including earliest eDNA_Date.
 #' @export
 #' @import dplyr
 #' @importFrom readxl read_excel
@@ -143,11 +143,54 @@ summarize_edna_data <- function(edna_file, sheet = "eDNA_data_ALL") {
       Total_eDNA_Samples = n(),
       eDNA_Positives = sum(LOD_sample_positive == 1 | LOD_sample_positive == "1", na.rm = TRUE),
       eDNA_Mean_Conc = mean(as.numeric(Conc_mean), na.rm = TRUE),
+      eDNA_Date = min(as.Date(Date), na.rm = TRUE),
       .groups = "drop"
     ) %>%
     mutate(
       eDNA_Pct_Positive = (eDNA_Positives / Total_eDNA_Samples) * 100
     )
+}
+
+#' Get Earliest eDNA Dates per Reef-Year
+#'
+#' Extracts the earliest eDNA sample date for each reef-year combination.
+#' Used as a temporal anchor to filter cull data so that only post-eDNA
+#' dives are counted in the cost-benefit analysis.
+#'
+#' @param edna_file Path to eDNA excel file.
+#' @param sheet Sheet name, defaults to "eDNA_data_ALL".
+#' @return Data frame with columns: Year, ReefLabel, date_edna.
+#' @export
+#' @import dplyr
+#' @importFrom readxl read_excel
+#' @importFrom stringr str_extract
+get_edna_dates <- function(edna_file, sheet = "eDNA_data_ALL") {
+  read_excel(edna_file, sheet = sheet) %>%
+    mutate(
+      ReefLabel = str_extract(ReefName, "[0-9]+-[0-9a-zA-Z]+"),
+      date_edna = as.Date(Date)
+    ) %>%
+    filter(!is.na(ReefLabel), !is.na(date_edna)) %>%
+    group_by(Year, ReefLabel) %>%
+    summarise(date_edna = min(date_edna), .groups = "drop")
+}
+
+#' Filter Cull Data to Post-eDNA Dives Only
+#'
+#' Joins eDNA temporal anchors to cull data and removes any cull dives that
+#' occurred before the earliest eDNA sample date for that reef-year.
+#' Reefs without eDNA data (date_edna NA after join) retain all dives.
+#'
+#' @param cull_data Prepared cull data from [prepare_cull_data()].
+#' @param edna_dates eDNA date anchors from [get_edna_dates()].
+#' @return Filtered cull data containing only post-eDNA dives.
+#' @export
+#' @import dplyr
+filter_cull_post_edna <- function(cull_data, edna_dates) {
+  cull_data %>%
+    left_join(edna_dates, by = c("Year", "ReefLabel")) %>%
+    filter(is.na(date_edna) | date_cull >= date_edna) %>%
+    select(-date_edna)
 }
 
 #' Process eDNA Survey Events
@@ -189,6 +232,8 @@ process_edna_events <- function(edna_data, gap_days = 7) {
 #' Combine All Reef Data
 #'
 #' @param cull_summary Checked and evaluated summarizations for cull.
+#'   For temporally correct analysis, cull data should be pre-filtered
+#'   via [filter_cull_post_edna()] before aggregation.
 #' @param first_day_summary Scout dive metrics.
 #' @param manta_summary Evaluated Manta metrics.
 #' @param edna_summary Summary of eDNA traces.
