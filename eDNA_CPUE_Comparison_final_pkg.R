@@ -79,7 +79,7 @@ same6_any <- fuzzy_inner_join(
     mutate(diff_days = as.numeric(date_cull - date_edna), Reef = Reef.x)
 
 reef_any <- same6_any %>%
-    group_by(Reef, Collection.org) %>%
+    group_by(Reef, Collection.org, Year) %>%
     summarise(
         total_cots      = sum(Cohort1 + Cohort2 + Cohort3 + Cohort4, na.rm = TRUE),
         total_bottom    = sum(Bottomtime, na.rm = TRUE),
@@ -182,10 +182,10 @@ ggplot(dat_glmm, aes(x = perc_pos_reef, y = obs_cpue)) +
 # Set CPUE Management Threshold
 cpue_thresh <- 0.04
 
-# Baseline uses 6 Months max window; Aggregating strictly by Reef
+# Baseline uses 6 Months max window; Aggregating by Reef, Collection.org, and Year
 dat_evt <- dat_glmm %>%
     filter(horizon == "6 Months") %>%
-    group_by(Reef, Collection.org) %>%
+    group_by(Reef, Collection.org, Year) %>%
     summarise(
         counts = sum(total_cots, na.rm = TRUE),
         total_bottom = sum(total_bottom, na.rm = TRUE),
@@ -198,7 +198,7 @@ dat_evt <- dat_glmm %>%
         cpue = counts / total_bottom,
         conc_t = log1p(conc_mean_reef)
     ) %>%
-    dplyr::select(reef, Collection.org, perc_pos, conc_t, conc_mean_reef, cpue)
+    dplyr::select(reef, Collection.org, Year, perc_pos, conc_t, conc_mean_reef, cpue)
 
 res_all <- make_confusion(dat_evt, perc_thresh = 48, cpue_thresh = cpue_thresh)
 plot_confusion(res_all, title = sprintf("Full Data Matrix (eDNA ≥ 48%%, CPUE ≥ %.3f)", cpue_thresh))
@@ -259,9 +259,9 @@ p_hm
 p_cm
 cpue_target <- 0.02
 
-# Ensure we aggregate strictly by Reef to prevent Site-level contamination
+# Ensure we aggregate by Reef, Collection.org, and Year to preserve annual sampling events
 dat_evt_hor <- dat_glmm %>%
-    group_by(Reef, Collection.org, horizon) %>%
+    group_by(Reef, Collection.org, Year, horizon) %>%
     summarise(
         counts = sum(total_cots, na.rm = TRUE),
         total_bottom = sum(total_bottom, na.rm = TRUE),
@@ -272,7 +272,7 @@ dat_evt_hor <- dat_glmm %>%
         reef = Reef,
         cpue = counts / total_bottom
     ) %>%
-    dplyr::select(reef, Collection.org, perc_pos, cpue, horizon)
+    dplyr::select(reef, Collection.org, Year, perc_pos, cpue, horizon)
 
 
 horizons <- levels(dat_evt_hor$horizon)
@@ -439,13 +439,13 @@ df_spatial <- bind_rows(spatial_results) %>%
 # Run CV Threshold tuning evaluating spatial density bounds 
 # We evaluate both 0.04 and 0.02 CPUE Targets, using unified global thresholds per radius.
 
-res_04 <- evaluate_unified_spatial(df_spatial, 0.04)
+res_04 <- evaluate_unified_spatial(df_spatial, 0.04, seq(0, 100, by = 5))
 if (!is.null(res_04)) {
     p_spatial_04 <- res_04$p
     print(p_spatial_04)
 }
 
-res_02 <- evaluate_unified_spatial(df_spatial, 0.02)
+res_02 <- evaluate_unified_spatial(df_spatial, 0.02, seq(0, 100, by = 5))
 if (!is.null(res_02)) {
     p_spatial_02 <- res_02$p
     print(p_spatial_02)

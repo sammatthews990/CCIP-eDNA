@@ -838,18 +838,18 @@ kable(scaled_table_cd, caption = paste0("Program-Level Estimates Scaled to ", op
 ### Key Savings Estimates
 
 ```{r per-reef-callout, results='asis'}
-# Extract Approach B per-reef net savings
-edna_net_row <- boot_edna$per_reef %>% filter(metric == "Net dollar savings per reef (after eDNA cost)")
-edna_hrs_row <- boot_edna$per_reef %>% filter(metric == "Hours saved per reef")
+# Extract Approach D per-reef net savings
+edna_net_row <- boot_edna_manta$per_reef %>% filter(metric == "Net dollar savings per reef (after eDNA cost)")
+edna_hrs_row <- boot_edna_manta$per_reef %>% filter(metric == "Hours saved per reef")
 
-# Extract Approach B scaled program savings
-edna_scaled_net_row <- boot_edna$scaled %>% filter(metric == "Annual net savings (after eDNA costs)")
-edna_scaled_hrs_row <- boot_edna$scaled %>% filter(metric == "Annual hours saved")
+# Extract Approach D scaled program savings
+edna_scaled_net_row <- boot_edna_manta$scaled %>% filter(metric == "Annual net savings (after eDNA costs)")
+edna_scaled_hrs_row <- boot_edna_manta$scaled %>% filter(metric == "Annual hours saved")
 
 cat(paste0(
   "\n\n::: {.callout-note}\n",
-  "## Expected Savings: Integrated eDNA (Approach B)\n\n",
-  "Using the integrated eDNA approach (Approach B) at an operational scale of **", operational_tactical_reefs, " reefs per year**:\n\n",
+  "## Expected Savings: eDNA + Manta (Approach D)\n\n",
+  "Using the eDNA + Manta approach (Approach D) at an operational scale of **", operational_tactical_reefs, " reefs per year**:\n\n",
   "#### Per-Reef Estimates\n",
   "- **", round(edna_hrs_row$median, 1), " diver hours saved** (80% CI: ",
     round(edna_hrs_row$ci_lower, 1), "–", round(edna_hrs_row$ci_upper, 1), ")\n",
@@ -860,7 +860,7 @@ cat(paste0(
     format(round(edna_scaled_hrs_row$ci_lower, 0), big.mark = ","), "–", format(round(edna_scaled_hrs_row$ci_upper, 0), big.mark = ","), ")\n",
   "- **", dollar(edna_scaled_net_row$median), " net annual savings** (80% CI: ",
     dollar(edna_scaled_net_row$ci_lower), "–", dollar(edna_scaled_net_row$ci_upper), ") after all eDNA costs\n\n",
-  "**Break-even probability:** ", round(boot_edna$breakeven_prob * 100, 1),
+  "**Break-even probability:** ", round(boot_edna_manta$breakeven_prob * 100, 1),
   "% of bootstrap replicates show positive net savings at the program level.\n",
   ":::\n\n"
 ))
@@ -871,21 +871,21 @@ cat(paste0(
 
 ## Sensitivity Analysis: Unit Cost Assumptions
 
-The financial estimates above depend on assumed cost parameters. This section examines how the **net annual savings for Approach B** (Integrated eDNA) change as we vary each assumption independently, holding others at their base values.
+The financial estimates above depend on assumed cost parameters. This section examines how the **net annual savings for Approach D** (eDNA + Manta) change as we vary each assumption independently, holding others at their base values.
 
 ```{r sensitivity-analysis, fig.width=10, fig.height=7}
 # Compute based on actual eDNA program cost, not per-reef
 edna_total_program_cost <- program_cost
 
 sens <- sensitivity_analysis(
-  boot_result = boot_edna,
+  boot_result = boot_edna_manta,
   cost_per_hour_range = seq(600, 1400, 200),
   edna_program_cost_range = seq(200000, 600000, 100000),
   n_reefs_range = seq(30, 50, 5)
 )
 
 # Get base case net savings (median from bootstrap)
-base_net <- median(boot_edna$boot_dist$scaled_net_savings, na.rm = TRUE)
+base_net <- median(boot_edna_manta$boot_dist$scaled_net_savings, na.rm = TRUE)
 
 ggplot(sens, aes(x = value_label, y = net_annual_savings, fill = is_base)) +
   geom_col(show.legend = FALSE, width = 0.7) +
@@ -895,7 +895,7 @@ ggplot(sens, aes(x = value_label, y = net_annual_savings, fill = is_base)) +
   scale_y_continuous(labels = dollar) +
   scale_fill_manual(values = c("TRUE" = "#e15759", "FALSE" = "#76b7b2")) +
   labs(
-    title = "Sensitivity Analysis: Net Annual Savings (Approach B)",
+    title = "Sensitivity Analysis: Net Annual Savings (Approach D: eDNA + Manta)",
     subtitle = paste0("Base case (red bar) = $", format(cost_per_diver_hour, big.mark = ","), "/hr, $",
                       format(edna_total_program_cost, big.mark = ","), " program cost, ",
                       operational_tactical_reefs, " reefs | Dotted line = bootstrap median"),
@@ -1000,7 +1000,7 @@ kable(
 
 ### Converting Saved Hours to Additional Hectares
 
-Using the bootstrap-estimated hours saved from the integrated eDNA approach (Approach B), we can estimate how many additional cull sites those hours could service — and therefore how many additional hectares of reef could be under active COTS management.
+Using the bootstrap-estimated hours saved from the eDNA + Manta approach (Approach D), we can estimate how many additional cull sites those hours could service — and therefore how many additional hectares of reef could be under active COTS management.
 
 We present two benchmarks:
 
@@ -1008,8 +1008,8 @@ We present two benchmarks:
 - **All-closures benchmark** (`r site_effort$closure_overall$median_hrs` hrs/site): Based on the median across all closures regardless of severity. This is a **conservative estimate** that accounts for the mix of moderate and severe outbreaks encountered operationally.
 
 ```{r hectare-conversion, results='asis'}
-# Extract the bootstrap hours-saved distribution (Approach B, scaled to program)
-boot_hrs_saved <- boot_edna$boot_dist$scaled_hrs_saved
+# Extract the bootstrap hours-saved distribution (Approach D, scaled to program)
+boot_hrs_saved <- boot_edna_manta$boot_dist$scaled_hrs_saved
 
 # Benchmarks
 moderate_hrs <- site_effort$closure_by_max_density %>%
@@ -1058,7 +1058,7 @@ pct_inc_actioned_q <- quantile(pct_inc_actioned, probs = ci_probs, na.rm = TRUE)
 cat(paste0(
   "\n\n::: {.callout-note}\n",
   "## Additional Coral Reef Area Under Active Management\n\n",
-  "By redirecting the diver hours saved through eDNA-informed closures (Approach B, ",
+  "By redirecting the diver hours saved through eDNA-informed closures (Approach D, ",
   operational_tactical_reefs, " reefs/year), the program could manage:\n\n",
   "#### Using Moderate-Density Benchmark (", moderate_hrs, " hrs/site)\n",
   "- **", round(mod_q[2], 0), " additional cull sites closed** (80% CI: ",
@@ -1255,16 +1255,16 @@ kable(scaling_manta_df, caption = "Scaled to Operational Program: Manta-Only vs 
 ---
 
 ```{r synthesis-section, results='asis'}
-# Extract required dynamic metrics for synthesis
-b_net_med <- boot_edna$scaled %>% filter(metric == "Annual net savings (after eDNA costs)") %>% pull(median)
-b_net_lo  <- boot_edna$scaled %>% filter(metric == "Annual net savings (after eDNA costs)") %>% pull(ci_lower)
-b_net_hi  <- boot_edna$scaled %>% filter(metric == "Annual net savings (after eDNA costs)") %>% pull(ci_upper)
+# Extract required dynamic metrics for synthesis (Approach D: eDNA + Manta)
+b_net_med <- boot_edna_manta$scaled %>% filter(metric == "Annual net savings (after eDNA costs)") %>% pull(median)
+b_net_lo  <- boot_edna_manta$scaled %>% filter(metric == "Annual net savings (after eDNA costs)") %>% pull(ci_lower)
+b_net_hi  <- boot_edna_manta$scaled %>% filter(metric == "Annual net savings (after eDNA costs)") %>% pull(ci_upper)
 
-b_hrs_med <- boot_edna$scaled %>% filter(metric == "Annual hours saved") %>% pull(median)
-b_hrs_lo  <- boot_edna$scaled %>% filter(metric == "Annual hours saved") %>% pull(ci_lower)
-b_hrs_hi  <- boot_edna$scaled %>% filter(metric == "Annual hours saved") %>% pull(ci_upper)
+b_hrs_med <- boot_edna_manta$scaled %>% filter(metric == "Annual hours saved") %>% pull(median)
+b_hrs_lo  <- boot_edna_manta$scaled %>% filter(metric == "Annual hours saved") %>% pull(ci_lower)
+b_hrs_hi  <- boot_edna_manta$scaled %>% filter(metric == "Annual hours saved") %>% pull(ci_upper)
 
-b_fn_med  <- boot_edna$scaled %>% filter(metric == "Annual missed outbreaks (FN)") %>% pull(median)
+b_fn_med  <- boot_edna_manta$scaled %>% filter(metric == "Annual missed outbreaks (FN)") %>% pull(median)
 
 # Days equivalent
 days_med <- b_hrs_med / diver_hours_per_day
@@ -1280,9 +1280,9 @@ cat(paste0(
   "::: {.callout-important}\n",
   "## Key Strategic Takeaways\n\n",
 
-  "1. **Substantial Net Return on Investment (Approach B - Integrated eDNA):**\n",
+  "1. **Substantial Net Return on Investment (Approach D - eDNA + Manta):**\n",
   "   - **Net Financial Savings:** Generating **", dollar(b_net_med), " per year** in net savings (80% CI: ", dollar(b_net_lo), " – ", dollar(b_net_hi), ") **after fully deducting** the ", dollar(program_cost), " annual eDNA program budget.\n",
-  "   - **High Financial Reliability:** ", round(boot_edna$breakeven_prob * 100, 1), "% of bootstrap resamples produce positive net savings, demonstrating strong financial resilience against sampling variability.\n\n",
+  "   - **High Financial Reliability:** ", round(boot_edna_manta$breakeven_prob * 100, 1), "% of bootstrap resamples produce positive net savings, demonstrating strong financial resilience against sampling variability.\n\n",
 
   "2. **Diver Effort Avoided (Eliminating Ghost Culls):**\n",
   "   - **Avoided Diver Time:** **", format(round(b_hrs_med, 0), big.mark = ","), " diver hours saved per year** (80% CI: ", format(round(b_hrs_lo, 0), big.mark = ","), " – ", format(round(b_hrs_hi, 0), big.mark = ","), ") by preventing vessel deployment on non-outbreak reefs.\n",
@@ -1294,7 +1294,7 @@ cat(paste0(
   "   - **Expansion in Actioned Sites:** Using the median effort per actioned site (", median_actioned_hrs, " hrs/site), saved hours enable visiting **+", round(actioned_q[2], 0), " additional distinct sites** per year (80% CI: ", round(actioned_q[1], 0), " – ", round(actioned_q[3], 0), "), a **", round(pct_inc_actioned_q[2], 1), "% increase** over the historical baseline of ", format(round(avg_actioned_per_year, 0), big.mark = ","), " actioned sites/year.\n\n",
 
   "4. **Ecological Safety & Risk Control:**\n",
-  "   - **Negligible Missed Outbreaks:** Approach B restricts missed outbreaks to an expected **", round(b_fn_med, 2), " reefs per year**, providing near-perfect ecological safety while eliminating wasted effort.\n",
+  "   - **Negligible Missed Outbreaks:** Approach D restricts missed outbreaks to an expected **", round(b_fn_med, 2), " reefs per year**, providing near-perfect ecological safety while eliminating wasted effort.\n",
   ":::\n\n",
 
   "---\n\n",
@@ -1317,7 +1317,7 @@ cat(paste0(
   "* **Operational Scale Target:** Results are scaled to a projected operational deployment across **", operational_tactical_reefs, " tactical reefs per year**.\n",
   "* **Diver Hour Financial Valuation:** Diver effort is valued at **$", format(cost_per_diver_hour, big.mark = ","), " per diver hour**, calculated directly from vessel daily operating costs ($", format(cost_per_on_water_day, big.mark = ","), " per on-water day / ", diver_hours_per_day, " diver hours per day).\n",
   "* **eDNA Program Fixed Cost:** Total eDNA program cost is set at **$", format(program_cost, big.mark = ","), " per year** across 120 surveyed reefs, establishing an average cost of **$", format(round(edna_cost_per_reef, 2), big.mark = ","), " per reef**.\n",
-  "* **Scout Cull Hour Deduction:** For decision rules requiring an initial in-water scout check (Approaches A and B), Day-1 scout dive hours (`Scout_Diver_Hours`) are **strictly deducted** from True Negative savings yields before calculating net savings.\n\n",
+  "* **Scout Cull Hour Deduction:** For decision rules requiring an initial in-water scout check (Approaches A and B), Day-1 scout dive hours (`Scout_Diver_Hours`) are strictly deducted from True Negative savings yields. For Approach D (eDNA + Manta), no in-water scout culling is required prior to closure, allowing 100% of post-eDNA diver hours on non-outbreak reefs to be saved.\n\n",
 
   "#### D. Ecological Conversion & Baseline Assumptions\n",
   "* **Cull Site Polygon Area:** Standardized at **10 hectares (ha)** per cull site.\n",

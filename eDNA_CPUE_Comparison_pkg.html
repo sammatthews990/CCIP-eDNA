@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Sam Matthews">
-<meta name="dcterms.date" content="2026-04-16">
+<meta name="dcterms.date" content="2026-07-30">
 
 <title>eDNA CPUE Comparison</title>
 <style>
@@ -131,7 +131,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">April 16, 2026</p>
+      <p class="date">July 30, 2026</p>
     </div>
   </div>
   
@@ -229,7 +229,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">diff_days =</span> <span class="fu">as.numeric</span>(date_cull <span class="sc">-</span> date_edna), <span class="at">Reef =</span> Reef.x)</span>
 <span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>reef_any <span class="ot">&lt;-</span> same6_any <span class="sc">%&gt;%</span></span>
-<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(Reef, Collection.org) <span class="sc">%&gt;%</span></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(Reef, Collection.org, Year) <span class="sc">%&gt;%</span></span>
 <span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>    <span class="fu">summarise</span>(</span>
 <span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>        <span class="at">total_cots      =</span> <span class="fu">sum</span>(Cohort1 <span class="sc">+</span> Cohort2 <span class="sc">+</span> Cohort3 <span class="sc">+</span> Cohort4, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
 <span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>        <span class="at">total_bottom    =</span> <span class="fu">sum</span>(Bottomtime, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
@@ -425,10 +425,10 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
 <div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Set CPUE Management Threshold</span></span>
 <span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>cpue_thresh <span class="ot">&lt;-</span> <span class="fl">0.04</span></span>
 <span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Baseline uses 6 Months max window; Aggregating strictly by Reef</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Baseline uses 6 Months max window; Aggregating by Reef, Collection.org, and Year</span></span>
 <span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>dat_evt <span class="ot">&lt;-</span> dat_glmm <span class="sc">%&gt;%</span></span>
 <span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(horizon <span class="sc">==</span> <span class="st">"6 Months"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(Reef, Collection.org) <span class="sc">%&gt;%</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(Reef, Collection.org, Year) <span class="sc">%&gt;%</span></span>
 <span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">summarise</span>(</span>
 <span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>        <span class="at">counts =</span> <span class="fu">sum</span>(total_cots, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
 <span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>        <span class="at">total_bottom =</span> <span class="fu">sum</span>(total_bottom, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
@@ -441,7 +441,7 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
 <span id="cb11-17"><a href="#cb11-17" aria-hidden="true" tabindex="-1"></a>        <span class="at">cpue =</span> counts <span class="sc">/</span> total_bottom,</span>
 <span id="cb11-18"><a href="#cb11-18" aria-hidden="true" tabindex="-1"></a>        <span class="at">conc_t =</span> <span class="fu">log1p</span>(conc_mean_reef)</span>
 <span id="cb11-19"><a href="#cb11-19" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">%&gt;%</span></span>
-<span id="cb11-20"><a href="#cb11-20" aria-hidden="true" tabindex="-1"></a>    dplyr<span class="sc">::</span><span class="fu">select</span>(reef, Collection.org, perc_pos, conc_t, conc_mean_reef, cpue)</span>
+<span id="cb11-20"><a href="#cb11-20" aria-hidden="true" tabindex="-1"></a>    dplyr<span class="sc">::</span><span class="fu">select</span>(reef, Collection.org, Year, perc_pos, conc_t, conc_mean_reef, cpue)</span>
 <span id="cb11-21"><a href="#cb11-21" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb11-22"><a href="#cb11-22" aria-hidden="true" tabindex="-1"></a>res_all <span class="ot">&lt;-</span> <span class="fu">make_confusion</span>(dat_evt, <span class="at">perc_thresh =</span> <span class="dv">48</span>, <span class="at">cpue_thresh =</span> cpue_thresh)</span>
 <span id="cb11-23"><a href="#cb11-23" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_confusion</span>(res_all, <span class="at">title =</span> <span class="fu">sprintf</span>(<span class="st">"Full Data Matrix (eDNA ≥ 48%%, CPUE ≥ %.3f)"</span>, cpue_thresh))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
@@ -505,12 +505,12 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
 <pre><code># A tibble: 6 × 6
   cpue_thr perc_star F1_mean_se    Acc_mean_se   Prec_mean_se  Rec_mean_se  
      &lt;dbl&gt;     &lt;dbl&gt; &lt;chr&gt;         &lt;chr&gt;         &lt;chr&gt;         &lt;chr&gt;        
-1     0.01        46 0.897 ± 0.004 0.858 ± 0.006 0.890 ± 0.005 0.917 ± 0.006
-2     0.02        46 0.849 ± 0.004 0.800 ± 0.006 0.779 ± 0.006 0.950 ± 0.004
-3     0.04        62 0.732 ± 0.008 0.800 ± 0.006 0.646 ± 0.009 0.900 ± 0.009
-4     0.06        62 0.605 ± 0.010 0.741 ± 0.007 0.494 ± 0.011 0.868 ± 0.013
-5     0.08        82 0.456 ± 0.018 0.829 ± 0.006 0.393 ± 0.017 0.600 ± 0.022
-6     0.1         82 0.251 ± 0.016 0.829 ± 0.006 0.227 ± 0.015 0.321 ± 0.020</code></pre>
+1     0.01        38 0.869 ± 0.002 0.814 ± 0.004 0.813 ± 0.003 0.939 ± 0.003
+2     0.02        46 0.855 ± 0.003 0.827 ± 0.004 0.800 ± 0.004 0.927 ± 0.004
+3     0.04        56 0.572 ± 0.005 0.653 ± 0.005 0.428 ± 0.005 0.894 ± 0.006
+4     0.06        80 0.492 ± 0.009 0.787 ± 0.004 0.439 ± 0.010 0.614 ± 0.013
+5     0.08        82 0.386 ± 0.011 0.800 ± 0.004 0.303 ± 0.010 0.626 ± 0.018
+6     0.1         82 0.231 ± 0.011 0.787 ± 0.004 0.172 ± 0.009 0.431 ± 0.020</code></pre>
 </div>
 <details class="code-fold">
 <summary>Code</summary>
@@ -556,9 +556,9 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
 <summary>Code</summary>
 <div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>cpue_target <span class="ot">&lt;-</span> <span class="fl">0.02</span></span>
 <span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Ensure we aggregate strictly by Reef to prevent Site-level contamination</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Ensure we aggregate by Reef, Collection.org, and Year to preserve annual sampling events</span></span>
 <span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>dat_evt_hor <span class="ot">&lt;-</span> dat_glmm <span class="sc">%&gt;%</span></span>
-<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(Reef, Collection.org, horizon) <span class="sc">%&gt;%</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(Reef, Collection.org, Year, horizon) <span class="sc">%&gt;%</span></span>
 <span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">summarise</span>(</span>
 <span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>        <span class="at">counts =</span> <span class="fu">sum</span>(total_cots, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
 <span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>        <span class="at">total_bottom =</span> <span class="fu">sum</span>(total_bottom, <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
@@ -569,7 +569,7 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
 <span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a>        <span class="at">reef =</span> Reef,</span>
 <span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>        <span class="at">cpue =</span> counts <span class="sc">/</span> total_bottom</span>
 <span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">%&gt;%</span></span>
-<span id="cb16-16"><a href="#cb16-16" aria-hidden="true" tabindex="-1"></a>    dplyr<span class="sc">::</span><span class="fu">select</span>(reef, Collection.org, perc_pos, cpue, horizon)</span>
+<span id="cb16-16"><a href="#cb16-16" aria-hidden="true" tabindex="-1"></a>    dplyr<span class="sc">::</span><span class="fu">select</span>(reef, Collection.org, Year, perc_pos, cpue, horizon)</span>
 <span id="cb16-17"><a href="#cb16-17" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb16-18"><a href="#cb16-18" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb16-19"><a href="#cb16-19" aria-hidden="true" tabindex="-1"></a>horizons <span class="ot">&lt;-</span> <span class="fu">levels</span>(dat_evt_hor<span class="sc">$</span>horizon)</span>
@@ -590,9 +590,9 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
 <pre><code># A tibble: 3 × 7
   horizon   cpue_thr perc_star F1_mean_se   Acc_mean_se Prec_mean_se Rec_mean_se
   &lt;chr&gt;        &lt;dbl&gt;     &lt;dbl&gt; &lt;chr&gt;        &lt;chr&gt;       &lt;chr&gt;        &lt;chr&gt;      
-1 3 Months      0.02        48 0.900 ± 0.0… 0.873 ± 0.… 0.829 ± 0.0… 1.000 ± 0.…
-2 6 Months      0.02        46 0.849 ± 0.0… 0.800 ± 0.… 0.780 ± 0.0… 0.950 ± 0.…
-3 12 Months     0.02        48 0.797 ± 0.0… 0.751 ± 0.… 0.692 ± 0.0… 0.955 ± 0.…</code></pre>
+1 3 Months      0.02        48 0.855 ± 0.0… 0.841 ± 0.… 0.798 ± 0.0… 0.935 ± 0.…
+2 6 Months      0.02        46 0.856 ± 0.0… 0.827 ± 0.… 0.802 ± 0.0… 0.927 ± 0.…
+3 12 Months     0.02        46 0.809 ± 0.0… 0.780 ± 0.… 0.732 ± 0.0… 0.913 ± 0.…</code></pre>
 </div>
 <details class="code-fold">
 <summary>Code</summary>
@@ -667,12 +667,12 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
 <pre><code># A tibble: 6 × 7
   cpue_thr perc_star conc_mean_star F1_mean_se    Acc_mean_se   Prec_mean_se 
      &lt;dbl&gt;     &lt;dbl&gt;          &lt;dbl&gt; &lt;chr&gt;         &lt;chr&gt;         &lt;chr&gt;        
-1     0.01        40           4.85 0.815 ± 0.005 0.750 ± 0.006 0.827 ± 0.006
-2     0.02        50           7.11 0.808 ± 0.006 0.774 ± 0.006 0.806 ± 0.007
-3     0.04        50          17.3  0.633 ± 0.012 0.777 ± 0.006 0.585 ± 0.013
-4     0.06        50          17.3  0.461 ± 0.014 0.739 ± 0.006 0.407 ± 0.014
-5     0.08        80          24.4  0.223 ± 0.012 0.721 ± 0.006 0.155 ± 0.009
-6     0.1         80          24.4  0.104 ± 0.010 0.776 ± 0.007 0.083 ± 0.009
+1     0.01        40           7.12 0.869 ± 0.003 0.825 ± 0.004 0.853 ± 0.004
+2     0.02        50           7.12 0.838 ± 0.004 0.819 ± 0.004 0.824 ± 0.004
+3     0.04        60          10.6  0.471 ± 0.007 0.641 ± 0.005 0.393 ± 0.007
+4     0.06        80          22.9  0.453 ± 0.010 0.788 ± 0.005 0.445 ± 0.012
+5     0.08        80          22.9  0.278 ± 0.011 0.796 ± 0.004 0.234 ± 0.011
+6     0.1         80          22.9  0.085 ± 0.008 0.778 ± 0.005 0.063 ± 0.006
 # ℹ 1 more variable: Rec_mean_se &lt;chr&gt;</code></pre>
 </div>
 <details class="code-fold">
@@ -974,23 +974,23 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
 <td style="text-align: left;">0.02</td>
 <td style="text-align: left;">500m Radius</td>
 <td style="text-align: left;">3x12 Density</td>
-<td style="text-align: right;">50</td>
-<td style="text-align: right;">0.958</td>
-<td style="text-align: right;">0.543</td>
-<td style="text-align: right;">0.958</td>
-<td style="text-align: right;">0.708</td>
-<td style="text-align: right;">0.814</td>
+<td style="text-align: right;">60</td>
+<td style="text-align: right;">0.937</td>
+<td style="text-align: right;">0.371</td>
+<td style="text-align: right;">0.937</td>
+<td style="text-align: right;">0.776</td>
+<td style="text-align: right;">0.849</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">0.02</td>
 <td style="text-align: left;">500m Radius</td>
 <td style="text-align: left;">4x6 Density</td>
-<td style="text-align: right;">50</td>
-<td style="text-align: right;">0.917</td>
+<td style="text-align: right;">60</td>
+<td style="text-align: right;">0.667</td>
 <td style="text-align: right;">0.267</td>
-<td style="text-align: right;">0.917</td>
-<td style="text-align: right;">0.733</td>
-<td style="text-align: right;">0.815</td>
+<td style="text-align: right;">0.667</td>
+<td style="text-align: right;">0.667</td>
+<td style="text-align: right;">0.667</td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">0.04</td>

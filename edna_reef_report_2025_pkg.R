@@ -571,6 +571,37 @@ cull_sites_map <- cull_sites_map |>
         )
     )
 
+# --- 8e. Load Baseline Monitoring Reefs (MAP == YES) -------------------------
+baseline_file <- "data/Baseline monitoring reefs with comments.xlsx"
+if (file.exists(baseline_file)) {
+    baseline_reefs <- read_excel(baseline_file) |>
+        filter(MAP == "YES") |>
+        filter(!is.na(LON) & !is.na(LAT)) |>
+        mutate(
+            Sector_fac  = factor(Sector),
+            cluster_str = as.character(cluster)
+        )
+
+    # Palette for sector color-coding
+    sector_levels <- levels(baseline_reefs$Sector_fac)
+    pal_sector <- colorFactor(
+        palette = scales::hue_pal()(length(sector_levels)),
+        domain  = baseline_reefs$Sector_fac
+    )
+
+    baseline_popups <- paste0(
+        "<b>Baseline Monitoring Reef: ", baseline_reefs$Reef_Name, "</b><br>",
+        "Cluster: ", baseline_reefs$cluster_str, "<br>",
+        "Sector: ", baseline_reefs$Sector_fac
+    )
+
+    baseline_tooltips <- paste0(
+        baseline_reefs$Reef_Name, " (Cluster ", baseline_reefs$cluster_str, ")"
+    )
+} else {
+    baseline_reefs <- NULL
+}
+
 map <- leaflet() |>
     addProviderTiles(
         providers$Esri.WorldImagery,
@@ -647,6 +678,31 @@ map <- leaflet() |>
         group  = "eDNA Sample Sites (Jan 2025+)"
     )
 
+if (!is.null(baseline_reefs) && nrow(baseline_reefs) > 0) {
+    map <- map |>
+        addCircleMarkers(
+            data        = baseline_reefs,
+            lng         = ~LON,
+            lat         = ~LAT,
+            radius      = 7,
+            color       = "#222222",
+            weight      = 1.5,
+            fillColor   = ~pal_sector(Sector_fac),
+            fillOpacity = 0.85,
+            popup       = baseline_popups,
+            label       = baseline_tooltips,
+            group       = "Baseline Monitoring Reefs (MAP = YES)"
+        ) |>
+        addLegend(
+            position = "bottomleft",
+            pal      = pal_sector,
+            values   = baseline_reefs$Sector_fac,
+            title    = "Baseline Sector",
+            opacity  = 0.9,
+            group    = "Baseline Monitoring Reefs (MAP = YES)"
+        )
+}
+
 if (exists("manta_tracks") && !is.null(manta_tracks) && nrow(manta_tracks) > 0) {
     map <- map |> addPolylines(
         data = manta_tracks,
@@ -680,6 +736,7 @@ if (exists("manta_cots_pts") && !is.null(manta_cots_pts) && nrow(manta_cots_pts)
 # Layer control
 map <- map |> addLayersControl(
     overlayGroups = c(
+        "Baseline Monitoring Reefs (MAP = YES)",
         "Target reefs (eDNA surveyed Jan 2025+)",
         "Target reefs (no eDNA since Jan 2025)",
         "Non-target reefs (eDNA surveyed Jan 2025+)",
