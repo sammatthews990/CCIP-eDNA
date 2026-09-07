@@ -24,10 +24,10 @@ theme_set(theme_bw() + theme(panel.grid.minor = element_blank()))
 
 
 # Load Cull data
-cull.dat <- read_excel("data/260201_COTS-Cull-Data-Ewels.xlsx", sheet = "Cull")
+cull.dat <- read_excel("data/260529-COTS-Manta-Cull-RHIS-Lawrence-CSIRO.xlsx", sheet = "Cull")
 
 # Load eDNA data
-edna.dat <- read_excel("data/eDNA data_ALL_20260225.xlsx", sheet = "eDNA_data_ALL")
+edna.dat <- read_excel("data/eDNA data_ALL_20260528.xlsx", sheet = "eDNA_data_ALL")
 
 # Clean Cull Data
 cull <- cull.dat %>%
@@ -180,7 +180,7 @@ ggplot(dat_glmm, aes(x = perc_pos_reef, y = obs_cpue)) +
     geom_line(data = nd_gam, aes(x = perc_pos_reef, y = fit_cpue), linewidth = 1, color = "black", inherit.aes = FALSE) +
     labs(title = "GAM Spline NegBin Estimate: % Pos")
 # Set CPUE Management Threshold
-cpue_thresh <- 0.04
+cpue_thresh <- 0.02
 
 # Baseline uses 6 Months max window; Aggregating by Reef, Collection.org, and Year
 dat_evt <- dat_glmm %>%
@@ -200,7 +200,7 @@ dat_evt <- dat_glmm %>%
     ) %>%
     dplyr::select(reef, Collection.org, Year, perc_pos, conc_t, conc_mean_reef, cpue)
 
-res_all <- make_confusion(dat_evt, perc_thresh = 48, cpue_thresh = cpue_thresh)
+res_all <- make_confusion(dat_evt, perc_thresh = 46, cpue_thresh = cpue_thresh)
 plot_confusion(res_all, title = sprintf("Full Data Matrix (eDNA ≥ 48%%, CPUE ≥ %.3f)", cpue_thresh))
 # 1) Evaluate on a grid of %pos AND cpue thresholds (Heatmap)
 perc_grid <- seq(0, 100, by = 2)
@@ -214,23 +214,17 @@ grid <- tidyr::expand_grid(perc_thresh = perc_grid, cpue_thresh = cpue_grid) %>%
     ) %>%
     dplyr::select(-out)
 
-# F1 Heatmap
-p_hm <- ggplot(grid, aes(x = perc_thresh, y = cpue_thresh, fill = F1)) +
-    geom_raster() +
-    geom_contour(aes(z = F1), breaks = seq(0.2, 1, by = 0.2), colour = "black", linewidth = 0.3, alpha = 0.7) +
-    scale_fill_viridis_c(limits = c(0, 1)) +
-    labs(x = "eDNA % positive threshold", y = "CPUE threshold", fill = "F1", title = "F1 across %pos thresholds with iso-F1 contours")
-
 # 2) Cross validate across multiple CPUE levels
-cpue_levels <- c(0.01, 0.02, 0.04, 0.06, 0.08, 0.10)
+cpue_levels <- c(0, 0.005, 0.01, 0.02, 0.04, 0.06, 0.08, 0.10, 0.15)
 k <- 5
 R <- 100 # Reduced from 200 for rendering speed
 set.seed(1)
 
-
 results <- map(cpue_levels, ~ run_cv_for_cpue(dat_evt, .x, perc_grid, k = k, R = R))
 
-summary_table <- map_dfr(results, "perf_sum") %>%
+perf_summary <- map_dfr(results, "perf_sum")
+
+summary_table <- perf_summary %>%
     mutate(
         F1_mean_se   = sprintf("%.3f ± %.3f", F1_mean, F1_se),
         Acc_mean_se  = sprintf("%.3f ± %.3f", Acc_mean, Acc_se),
@@ -238,6 +232,21 @@ summary_table <- map_dfr(results, "perf_sum") %>%
         Rec_mean_se  = sprintf("%.3f ± %.3f", Rec_mean, Rec_se)
     ) %>%
     dplyr::select(cpue_thr, perc_star, F1_mean_se, Acc_mean_se, Prec_mean_se, Rec_mean_se)
+
+# 3) F1 Heatmap overlaid with CV-optimal threshold trajectory (dotted red line)
+p_hm <- ggplot(grid, aes(x = perc_thresh, y = cpue_thresh, fill = F1)) +
+    geom_raster() +
+    geom_contour(aes(z = F1), breaks = seq(0.2, 1, by = 0.2), colour = "black", linewidth = 0.3, alpha = 0.7) +
+    geom_path(data = perf_summary, aes(x = perc_star, y = cpue_thr), color = "red", linetype = "dashed", linewidth = 1.2, inherit.aes = FALSE) +
+    geom_point(data = perf_summary, aes(x = perc_star, y = cpue_thr), color = "red", size = 2.5, inherit.aes = FALSE) +
+    scale_fill_viridis_c(limits = c(0, 1)) +
+    labs(
+        x = "eDNA % positive threshold",
+        y = "CPUE threshold",
+        fill = "F1",
+        title = "F1 across %pos thresholds with iso-F1 contours & CV-Optimal Trajectory (Red)"
+    ) +
+    theme_bw(base_family = "Helvetica")
 
 # Show the optimal threshold summary
 summary_table
@@ -253,7 +262,11 @@ p_cm <- ggplot(cm_all, aes(x = pred, y = actual, fill = row_prop)) +
     facet_wrap(~panel, ncol = 3) +
     scale_fill_viridis_c(option = "mako", direction = -1, begin = 0.25, name = "Count Rate") +
     labs(x = "Prediction from eDNA (% pos)", y = "Ground truth from CPUE", title = "Confusion matrices with CV-tuned thresholds") +
-    coord_fixed()
+    coord_fixed() +
+    theme_bw(base_family = "Helvetica")
+
+ggsave("plots/f1_heatmap_thresholds.png", p_hm, width = 8, height = 6, dpi = 300)
+ggsave("plots/f1_heatmap_thresholds.pdf", p_hm, width = 8, height = 6, dpi = 300)
 
 p_hm
 p_cm
@@ -342,7 +355,7 @@ summary_table_2d
 
 # Plot 2D Multi-CM
 
-thr_df <- map_dfr(results_2d, "thr") %>% mutate(cpue_thr = sapply(results_2d, function(x) x$perf$cpue_thr))
+thr_df <- map_dfr(compact(results_2d), "thr") %>% mutate(cpue_thr = sapply(compact(results_2d), function(x) x$perf$cpue_thr))
 cm_all_2d <- pmap_dfr(list(thr_df$cpue_thr, thr_df$perc_star, thr_df$conc_t_star), function(cp, p, c) {
     obj <- make_confusion_2d(dat_evt, p, c, cp)
     obj$cm %>% mutate(panel = paste0("CPUE ≥ ", cp, "\n%pos*=", round(p, 1), "  conc*≈", round(pmax(expm1(c), 0), 1)))

@@ -107,9 +107,14 @@ make_confusion <- function(dat, perc_thresh, cpue_thresh) {
 #' @import dplyr tidyr
 #' @importFrom scales percent
 make_confusion_2d <- function(dat, perc_star, conc_t_star, cpue_thr, rule = "and") {
+    is_pred_pos <- if (rule == "or") {
+        (dat$perc_pos >= perc_star) | (dat$conc_t >= conc_t_star)
+    } else {
+        (dat$perc_pos >= perc_star) & (dat$conc_t >= conc_t_star)
+    }
     classified <- dat %>%
         mutate(
-            pred = if_else(perc_pos >= perc_star & conc_t >= conc_t_star, "Pred +", "Pred -"),
+            pred = if_else(is_pred_pos, "Pred +", "Pred -"),
             actual = if_else(cpue >= cpue_thr, "Actual +", "Actual -")
         )
     cm <- classified %>%

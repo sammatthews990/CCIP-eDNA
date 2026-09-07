@@ -1,28 +1,45 @@
 #' Fit Horizon GLMM
 #'
-#' @param hor_val Horizon Value ("3 Months", etc)
+#' @param hor_val Horizon Value ("0-3 Months", etc)
 #' @param dat_glmm Dataset containing modelling inputs.
+#' @param var_type Type of predictor variable ("perc" for perc_pos_reef, "conc" for conc_t)
 #' @return Predictions tibble
 #' @export
 #' @import dplyr tidyr glmmTMB
 #' @importFrom stats median pf predict residuals sd
-fit_horizon_glmm <- function(hor_val, dat_glmm) {
+fit_horizon_glmm <- function(hor_val, dat_glmm, var_type = "perc") {
     dat_sub <- dat_glmm %>% filter(horizon == hor_val)
     if (nrow(dat_sub) == 0) return(NULL)
 
-    m_nb <- glmmTMB(
-        total_cots ~ perc_pos_reef + offset(log(total_bottom)) + (1 | Reef),
-        family = nbinom2(),
-        data = dat_sub,
-        control = glmmTMBControl(optCtrl = list(iter.max = 1e3, eval.max = 1e3))
-    )
+    if (var_type == "perc") {
+        m_nb <- glmmTMB(
+            total_cots ~ perc_pos_reef + offset(log(total_bottom)) + (1 | Reef),
+            family = nbinom2(),
+            data = dat_sub,
+            control = glmmTMBControl(optCtrl = list(iter.max = 1e3, eval.max = 1e3))
+        )
 
-    nd <- tibble(
-        perc_pos_reef = seq(min(dat_sub$perc_pos_reef), max(dat_sub$perc_pos_reef), length.out = 100),
-        total_bottom = median(dat_sub$total_bottom, na.rm = TRUE),
-        Reef = NA,
-        horizon = hor_val
-    )
+        nd <- tibble(
+            perc_pos_reef = seq(min(dat_sub$perc_pos_reef), max(dat_sub$perc_pos_reef), length.out = 100),
+            total_bottom = median(dat_sub$total_bottom, na.rm = TRUE),
+            Reef = NA,
+            horizon = hor_val
+        )
+    } else {
+        m_nb <- glmmTMB(
+            total_cots ~ conc_t + offset(log(total_bottom)) + (1 | Reef),
+            family = nbinom2(),
+            data = dat_sub,
+            control = glmmTMBControl(optCtrl = list(iter.max = 1e3, eval.max = 1e3))
+        )
+
+        nd <- tibble(
+            conc_t = seq(min(dat_sub$conc_t), max(dat_sub$conc_t), length.out = 100),
+            total_bottom = median(dat_sub$total_bottom, na.rm = TRUE),
+            Reef = NA,
+            horizon = hor_val
+        )
+    }
 
     pred <- predict(m_nb, newdata = nd, type = "link", se.fit = TRUE, re.form = NA)
     nd %>%
@@ -128,7 +145,7 @@ run_cv_for_horizon <- function(dat_full, hor_val, cpue_thr, perc_grid, k = 5, R 
 #' @export
 #' @import dplyr tidyr rsample purrr
 run_cv_2d <- function(dat, cpue_thr, perc_grid, conc_grid_t, rule = "and", k = 5, R = 100) {
-    dat2 <- dat %>% mutate(actual = cpue >= cpue_thr)
+    dat2 <- dat %>% mutate(actual = if (cpue_thr == 0) (cpue > 0) else (cpue >= cpue_thr))
     if (length(unique(dat2$actual)) < 2) return(NULL)
 
     folds <- vfold_cv(dat2, v = k, repeats = R, strata = actual)
@@ -159,12 +176,13 @@ run_cv_2d <- function(dat, cpue_thr, perc_grid, conc_grid_t, rule = "and", k = 5
 #'
 #' @param culls Cull dataset
 #' @param ednas eDNA dataset
-#' @param win_days Window
+#' @param win_days Maximum window in days
 #' @param label Label string
+#' @param min_days Minimum window in days (default 0)
 #' @return Data frame
 #' @export
 #' @import dplyr tidyr fuzzyjoin
-get_prior_cohort <- function(culls, ednas, win_days, label) {
+get_prior_cohort <- function(culls, ednas, win_days, label, min_days = 0) {
     res <- fuzzy_inner_join(
         culls, ednas,
         by = c("Reef" = "Reef", "date_cull" = "date_edna"),
@@ -172,7 +190,7 @@ get_prior_cohort <- function(culls, ednas, win_days, label) {
             `==`,
             function(cull_date, edna_date) {
                 diff <- as.numeric(cull_date - edna_date)
-                diff >= 0 & diff <= win_days
+                diff >= min_days & diff <= win_days
             }
         )
     ) %>% mutate(diff_days = as.numeric(date_cull - date_edna), Reef = Reef.x)

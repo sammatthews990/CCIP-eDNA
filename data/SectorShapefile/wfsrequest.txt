@@ -1,0 +1,1 @@
+https://maps.aims.gov.au/geoserver/aims/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=aims:ltms&maxFeatures=50&outputFormat=SHAPE-ZIP
