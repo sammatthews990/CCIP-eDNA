@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.7.25">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="Sam Matthews">
+
+<title>INLA screen: eDNA signal, distance, and time since sampling</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="02_distance_time_formulation_screen_files/libs/clipboard/clipboard.min.js"></script>
+<script src="02_distance_time_formulation_screen_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="02_distance_time_formulation_screen_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="02_distance_time_formulation_screen_files/libs/quarto-html/popper.min.js"></script>
+<script src="02_distance_time_formulation_screen_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="02_distance_time_formulation_screen_files/libs/quarto-html/anchor.min.js"></script>
+<link href="02_distance_time_formulation_screen_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="02_distance_time_formulation_screen_files/libs/quarto-html/quarto-syntax-highlighting-fe31d7bd2deb2a321418d01dba375a64.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="02_distance_time_formulation_screen_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="02_distance_time_formulation_screen_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="02_distance_time_formulation_screen_files/libs/bootstrap/bootstrap-bb462d781dde1847d9e3ccf7736099dd.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+
+
+</head>
+
+<body class="quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#purpose" id="toc-purpose" class="nav-link active" data-scroll-target="#purpose">Purpose</a></li>
+  <li><a href="#operational-edna-event-linkage" id="toc-operational-edna-event-linkage" class="nav-link" data-scroll-target="#operational-edna-event-linkage">Operational eDNA-event linkage</a></li>
+  <li><a href="#all-additive-subsets" id="toc-all-additive-subsets" class="nav-link" data-scroll-target="#all-additive-subsets">All additive subsets</a></li>
+  <li><a href="#hierarchical-interaction-screen" id="toc-hierarchical-interaction-screen" class="nav-link" data-scroll-target="#hierarchical-interaction-screen">Hierarchical interaction screen</a></li>
+  <li><a href="#combined-ranking-and-supported-effects" id="toc-combined-ranking-and-supported-effects" class="nav-link" data-scroll-target="#combined-ranking-and-supported-effects">Combined ranking and supported effects</a></li>
+  <li><a href="#site-level-distance-by-time-predictions" id="toc-site-level-distance-by-time-predictions" class="nav-link" data-scroll-target="#site-level-distance-by-time-predictions">Site-level distance-by-time predictions</a></li>
+  <li><a href="#interpretation-boundary" id="toc-interpretation-boundary" class="nav-link" data-scroll-target="#interpretation-boundary">Interpretation boundary</a></li>
+  </ul>
+</nav>
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">INLA screen: eDNA signal, distance, and time since sampling</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>Sam Matthews </p>
+          </div>
+  </div>
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="purpose" class="level2">
+<h2 class="anchored" data-anchor-id="purpose">Purpose</h2>
+<p>This fast first pass asks a narrower operational question than the full SPDE benchmark: how well do eDNA percent positive, mean concentration, distance from the eDNA sampling event, and days since that event explain subsequent COTS cull counts? Spatial and temporal context enter directly through distance and lag. All models retain one response per cull dive, use a negative-binomial likelihood with effort offset, and include a reef random intercept. No calendar-year or GBR-wide latent spatial field is fitted.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggplot2)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(readxl)</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(sf)</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>project_root <span class="ot">&lt;-</span> <span class="fu">normalizePath</span>(</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (<span class="fu">file.exists</span>(<span class="st">"data/eDNA data_ALL_20260528.xlsx"</span>)) <span class="st">"."</span> <span class="cf">else</span> <span class="fu">file.path</span>(<span class="st">".."</span>, <span class="st">".."</span>),</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">winslash =</span> <span class="st">"/"</span>, <span class="at">mustWork =</span> <span class="cn">TRUE</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>devtools<span class="sc">::</span><span class="fu">load_all</span>(<span class="fu">file.path</span>(project_root, <span class="st">"reefDNA"</span>))</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>output_dir <span class="ot">&lt;-</span> <span class="fu">file.path</span>(project_root, <span class="st">"analysis"</span>, <span class="st">"inla"</span>, <span class="st">"output"</span>)</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="fu">dir.create</span>(output_dir, <span class="at">recursive =</span> <span class="cn">TRUE</span>, <span class="at">showWarnings =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>additive_path <span class="ot">&lt;-</span> <span class="fu">file.path</span>(output_dir, <span class="st">"distance_time_additive_screen.rds"</span>)</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>interaction_path <span class="ot">&lt;-</span> <span class="fu">file.path</span>(output_dir, <span class="st">"distance_time_interaction_screen.rds"</span>)</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>prediction_path <span class="ot">&lt;-</span> <span class="fu">file.path</span>(output_dir, <span class="st">"distance_time_site_predictions.rds"</span>)</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>additive_prediction_path <span class="ot">&lt;-</span> <span class="fu">file.path</span>(output_dir, <span class="st">"distance_time_additive_site_predictions.rds"</span>)</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>refit_screen <span class="ot">&lt;-</span> <span class="fu">identical</span>(<span class="fu">tolower</span>(<span class="fu">Sys.getenv</span>(<span class="st">"REEFDNA_REFIT_SCREEN"</span>, <span class="st">"false"</span>)), <span class="st">"true"</span>)</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>reuse_screen <span class="ot">&lt;-</span> <span class="sc">!</span>refit_screen <span class="sc">&amp;&amp;</span> <span class="fu">file.exists</span>(additive_path) <span class="sc">&amp;&amp;</span> <span class="fu">file.exists</span>(interaction_path)</span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">20260908</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</div>
+</section>
+<section id="operational-edna-event-linkage" class="level2">
+<h2 class="anchored" data-anchor-id="operational-edna-event-linkage">Operational eDNA-event linkage</h2>
+<p>Each cull is paired with its most recent eligible prior eDNA event on the same reef and within 2,000 m and 183 days. Replicates within that event supply percent positive and mean concentration. If multiple events have the same lag, the nearest site is selected. This rule is fixed before inspecting CPUE.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>stage_a <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="fu">file.path</span>(output_dir, <span class="st">"stage_a_inla_model.rds"</span>))</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>raw_links <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(<span class="fu">file.path</span>(output_dir, <span class="st">"space_time_links.rds"</span>))</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>edna_raw <span class="ot">&lt;-</span> <span class="fu">read_excel</span>(</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">file.path</span>(project_root, <span class="st">"data"</span>, <span class="st">"eDNA data_ALL_20260528.xlsx"</span>),</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">sheet =</span> <span class="st">"eDNA_data_ALL"</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>edna_obs <span class="ot">&lt;-</span> <span class="fu">prepare_inla_edna</span>(edna_raw, <span class="at">crs_projected =</span> <span class="dv">3112</span>)</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>event_benchmark <span class="ot">&lt;-</span> <span class="fu">summarise_inla_event_benchmark</span>(</span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>  raw_links, edna_obs, stage_a<span class="sc">$</span>benchmark</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="fu">stopifnot</span>(</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">nrow</span>(event_benchmark) <span class="sc">==</span> dplyr<span class="sc">::</span><span class="fu">n_distinct</span>(event_benchmark<span class="sc">$</span>cull_id),</span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">min</span>(event_benchmark<span class="sc">$</span>edna_lag_days) <span class="sc">&gt;=</span> <span class="dv">0</span>,</span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">max</span>(event_benchmark<span class="sc">$</span>edna_lag_days) <span class="sc">&lt;=</span> <span class="dv">183</span>,</span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">max</span>(event_benchmark<span class="sc">$</span>edna_distance_m) <span class="sc">&lt;=</span> <span class="dv">2000</span></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a><span class="fu">saveRDS</span>(event_benchmark, <span class="fu">file.path</span>(output_dir, <span class="st">"event_benchmark_data.rds"</span>))</span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>event_audit <span class="ot">&lt;-</span> sf<span class="sc">::</span><span class="fu">st_drop_geometry</span>(event_benchmark) <span class="sc">%&gt;%</span></span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>    <span class="at">n_unique_culls =</span> <span class="fu">n</span>(),</span>
+<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a>    <span class="at">n_reefs =</span> <span class="fu">n_distinct</span>(Reef),</span>
+<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a>    <span class="at">n_edna_events_selected =</span> <span class="fu">n_distinct</span>(event_id),</span>
+<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a>    <span class="at">median_replicates_per_event_link =</span> <span class="fu">median</span>(edna_n_replicates),</span>
+<span id="cb2-26"><a href="#cb2-26" aria-hidden="true" tabindex="-1"></a>    <span class="at">median_distance_m =</span> <span class="fu">median</span>(edna_distance_m),</span>
+<span id="cb2-27"><a href="#cb2-27" aria-hidden="true" tabindex="-1"></a>    <span class="at">max_distance_m =</span> <span class="fu">max</span>(edna_distance_m),</span>
+<span id="cb2-28"><a href="#cb2-28" aria-hidden="true" tabindex="-1"></a>    <span class="at">median_lag_days =</span> <span class="fu">median</span>(edna_lag_days),</span>
+<span id="cb2-29"><a href="#cb2-29" aria-hidden="true" tabindex="-1"></a>    <span class="at">max_lag_days =</span> <span class="fu">max</span>(edna_lag_days)</span>
+<span id="cb2-30"><a href="#cb2-30" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb2-31"><a href="#cb2-31" aria-hidden="true" tabindex="-1"></a><span class="fu">write.csv</span>(event_audit, <span class="fu">file.path</span>(output_dir, <span class="st">"event_linkage_audit.csv"</span>), <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb2-32"><a href="#cb2-32" aria-hidden="true" tabindex="-1"></a>event_audit</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 1 × 8
+  n_unique_culls n_reefs n_edna_events_selected median_replicates_per_event_link
+           &lt;int&gt;   &lt;int&gt;                  &lt;int&gt;                            &lt;int&gt;
+1           2117      36                    165                               12
+# ℹ 4 more variables: median_distance_m &lt;dbl&gt;, max_distance_m &lt;dbl&gt;,
+#   median_lag_days &lt;dbl&gt;, max_lag_days &lt;dbl&gt;</code></pre>
+</div>
+</div>
+</section>
+<section id="all-additive-subsets" class="level2">
+<h2 class="anchored" data-anchor-id="all-additive-subsets">All additive subsets</h2>
+<p>The four continuous predictors are transformed and standardized once, then the same complete observations are used for all 16 additive subsets (including the reef-only null model). Concentration uses <code>log1p</code>; distance uses <code>log1p(distance / 200)</code>; lag uses <code>log1p(days)</code>.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (reuse_screen) {</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  additive_screen <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(additive_path)</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>} <span class="cf">else</span> {</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  additive_screen <span class="ot">&lt;-</span> <span class="fu">fit_inla_cpue_candidates</span>(</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    event_benchmark,</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">candidates =</span> <span class="fu">build_inla_additive_candidates</span>(),</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">include_vessel =</span> <span class="cn">FALSE</span>,</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">num_threads =</span> <span class="st">"2:1"</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">saveRDS</span>(additive_screen, additive_path)</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a><span class="fu">write.csv</span>(</span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>  additive_screen<span class="sc">$</span>ranking,</span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">file.path</span>(output_dir, <span class="st">"distance_time_additive_ranking.csv"</span>),</span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">row.names =</span> <span class="cn">FALSE</span></span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>additive_screen<span class="sc">$</span>ranking</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 16 × 12
+   model   terms     n n_fixed   waic effective_parameters…¹    dic mean_log_cpo
+   &lt;chr&gt;   &lt;chr&gt; &lt;int&gt;   &lt;int&gt;  &lt;dbl&gt;                  &lt;dbl&gt;  &lt;dbl&gt;        &lt;dbl&gt;
+ 1 prop+d… edna…  2117       4 13548.                   33.6 13548.        -3.20
+ 2 prop+c… edna…  2117       5 13549.                   34.6 13549.        -3.20
+ 3 prop+d… edna…  2117       3 13552.                   32.7 13552.        -3.20
+ 4 prop+c… edna…  2117       4 13554.                   33.8 13553.        -3.20
+ 5 prop+l… edna…  2117       3 13560.                   32.7 13560.        -3.20
+ 6 prop+c… edna…  2117       4 13561.                   33.7 13561.        -3.20
+ 7 conc+d… edna…  2117       4 13562.                   33.6 13562.        -3.20
+ 8 prop    edna…  2117       2 13566.                   31.8 13565.        -3.20
+ 9 prop+c… edna…  2117       3 13567.                   32.9 13567.        -3.20
+10 conc+d… edna…  2117       3 13569.                   32.8 13569.        -3.21
+11 conc+l… edna…  2117       3 13578.                   32.8 13578.        -3.21
+12 conc    edna…  2117       2 13587.                   32.0 13587.        -3.21
+13 distan… dist…  2117       3 13590.                   33.7 13589.        -3.21
+14 distan… dist…  2117       2 13592.                   32.7 13591.        -3.21
+15 lag     lag_z  2117       2 13613.                   33.2 13611.        -3.22
+16 null    inte…  2117       1 13617.                   32.2 13616.        -3.22
+# ℹ abbreviated name: ¹​effective_parameters_waic
+# ℹ 4 more variables: cpo_failures &lt;int&gt;, delta_waic &lt;dbl&gt;, waic_weight &lt;dbl&gt;,
+#   rank_waic &lt;int&gt;</code></pre>
+</div>
+</div>
+</section>
+<section id="hierarchical-interaction-screen" class="level2">
+<h2 class="anchored" data-anchor-id="hierarchical-interaction-screen">Hierarchical interaction screen</h2>
+<p>Interactions are tested only with all corresponding main effects retained. Six models add one pairwise interaction at a time; a final model includes all six pairwise interactions. Higher-order interactions are deferred because they are hard to interpret and are more likely to fit sampling idiosyncrasies.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (reuse_screen) {</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  interaction_screen <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(interaction_path)</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>} <span class="cf">else</span> {</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  interaction_screen <span class="ot">&lt;-</span> <span class="fu">fit_inla_cpue_candidates</span>(</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    event_benchmark,</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">candidates =</span> <span class="fu">build_inla_interaction_candidates</span>(),</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">include_vessel =</span> <span class="cn">FALSE</span>,</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">num_threads =</span> <span class="st">"2:1"</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">saveRDS</span>(interaction_screen, interaction_path)</span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a><span class="fu">write.csv</span>(</span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>  interaction_screen<span class="sc">$</span>ranking,</span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">file.path</span>(output_dir, <span class="st">"distance_time_interaction_ranking.csv"</span>),</span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">row.names =</span> <span class="cn">FALSE</span></span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>interaction_screen<span class="sc">$</span>ranking</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 7 × 12
+  model    terms     n n_fixed   waic effective_parameters…¹    dic mean_log_cpo
+  &lt;chr&gt;    &lt;chr&gt; &lt;int&gt;   &lt;int&gt;  &lt;dbl&gt;                  &lt;dbl&gt;  &lt;dbl&gt;        &lt;dbl&gt;
+1 full_al… edna…  2117      11 13511.                   41.9 13508.        -3.19
+2 full+co… edna…  2117       6 13528.                   36.6 13527.        -3.20
+3 full+di… edna…  2117       6 13537.                   35.4 13537.        -3.20
+4 full+pr… edna…  2117       6 13541.                   36.1 13540.        -3.20
+5 full+pr… edna…  2117       6 13545.                   35.7 13544.        -3.20
+6 full+co… edna…  2117       6 13546.                   35.6 13545.        -3.20
+7 full+pr… edna…  2117       6 13549.                   35.3 13549.        -3.20
+# ℹ abbreviated name: ¹​effective_parameters_waic
+# ℹ 4 more variables: cpo_failures &lt;int&gt;, delta_waic &lt;dbl&gt;, waic_weight &lt;dbl&gt;,
+#   rank_waic &lt;int&gt;</code></pre>
+</div>
+</div>
+</section>
+<section id="combined-ranking-and-supported-effects" class="level2">
+<h2 class="anchored" data-anchor-id="combined-ranking-and-supported-effects">Combined ranking and supported effects</h2>
+<p>WAIC is the primary fast ranking criterion; mean log CPO is retained as an observation-level predictive check. A later <code>brms</code> analysis should validate the shortlist using grouped cross-validation by reef or sampling event rather than selecting solely on in-sample information criteria.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>combined_ranking <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(additive_screen<span class="sc">$</span>ranking, <span class="at">family =</span> <span class="st">"additive subset"</span>),</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(interaction_screen<span class="sc">$</span>ranking, <span class="at">family =</span> <span class="st">"hierarchical interaction"</span>)</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(waic) <span class="sc">%&gt;%</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">delta_waic_all =</span> waic <span class="sc">-</span> <span class="fu">min</span>(waic),</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">rank_all =</span> <span class="fu">row_number</span>(),</span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">model_key =</span> <span class="fu">paste</span>(family, model, <span class="at">sep =</span> <span class="st">" :: "</span>)</span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a><span class="fu">write.csv</span>(</span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>  combined_ranking,</span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">file.path</span>(output_dir, <span class="st">"distance_time_combined_ranking.csv"</span>),</span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">row.names =</span> <span class="cn">FALSE</span></span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a>p_rank <span class="ot">&lt;-</span> combined_ranking <span class="sc">%&gt;%</span></span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">slice_head</span>(<span class="at">n =</span> <span class="dv">15</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">model_key =</span> <span class="fu">reorder</span>(model_key, delta_waic_all)) <span class="sc">%&gt;%</span></span>
+<span id="cb8-20"><a href="#cb8-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(delta_waic_all, model_key, <span class="at">color =</span> family)) <span class="sc">+</span></span>
+<span id="cb8-21"><a href="#cb8-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">size =</span> <span class="fl">2.8</span>) <span class="sc">+</span></span>
+<span id="cb8-22"><a href="#cb8-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="at">xintercept =</span> <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">7</span>), <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">color =</span> <span class="st">"grey55"</span>) <span class="sc">+</span></span>
+<span id="cb8-23"><a href="#cb8-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb8-24"><a href="#cb8-24" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="fu">expression</span>(Delta <span class="sc">*</span> <span class="st">"WAIC from best formulation"</span>), <span class="at">y =</span> <span class="cn">NULL</span>,</span>
+<span id="cb8-25"><a href="#cb8-25" aria-hidden="true" tabindex="-1"></a>    <span class="at">title =</span> <span class="st">"Fast INLA formulation screen"</span>,</span>
+<span id="cb8-26"><a href="#cb8-26" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="st">"Negative-binomial counts with effort offset and reef iid intercept"</span></span>
+<span id="cb8-27"><a href="#cb8-27" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb8-28"><a href="#cb8-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_bw</span>()</span>
+<span id="cb8-29"><a href="#cb8-29" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(</span>
+<span id="cb8-30"><a href="#cb8-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">file.path</span>(output_dir, <span class="st">"distance_time_model_ranking.png"</span>),</span>
+<span id="cb8-31"><a href="#cb8-31" aria-hidden="true" tabindex="-1"></a>  p_rank, <span class="at">width =</span> <span class="dv">9</span>, <span class="at">height =</span> <span class="dv">7</span>, <span class="at">dpi =</span> <span class="dv">300</span></span>
+<span id="cb8-32"><a href="#cb8-32" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb8-33"><a href="#cb8-33" aria-hidden="true" tabindex="-1"></a>p_rank</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="02_distance_time_formulation_screen_files/figure-html/combined-ranking-1.png" class="img-fluid figure-img" width="864"></p>
+</figure>
+</div>
+</div>
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>combined_ranking <span class="sc">%&gt;%</span> <span class="fu">slice_head</span>(<span class="at">n =</span> <span class="dv">15</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 15 × 16
+   model   terms     n n_fixed   waic effective_parameters…¹    dic mean_log_cpo
+   &lt;chr&gt;   &lt;chr&gt; &lt;int&gt;   &lt;int&gt;  &lt;dbl&gt;                  &lt;dbl&gt;  &lt;dbl&gt;        &lt;dbl&gt;
+ 1 full_a… edna…  2117      11 13511.                   41.9 13508.        -3.19
+ 2 full+c… edna…  2117       6 13528.                   36.6 13527.        -3.20
+ 3 full+d… edna…  2117       6 13537.                   35.4 13537.        -3.20
+ 4 full+p… edna…  2117       6 13541.                   36.1 13540.        -3.20
+ 5 full+p… edna…  2117       6 13545.                   35.7 13544.        -3.20
+ 6 full+c… edna…  2117       6 13546.                   35.6 13545.        -3.20
+ 7 prop+d… edna…  2117       4 13548.                   33.6 13548.        -3.20
+ 8 full+p… edna…  2117       6 13549.                   35.3 13549.        -3.20
+ 9 prop+c… edna…  2117       5 13549.                   34.6 13549.        -3.20
+10 prop+d… edna…  2117       3 13552.                   32.7 13552.        -3.20
+11 prop+c… edna…  2117       4 13554.                   33.8 13553.        -3.20
+12 prop+l… edna…  2117       3 13560.                   32.7 13560.        -3.20
+13 prop+c… edna…  2117       4 13561.                   33.7 13561.        -3.20
+14 conc+d… edna…  2117       4 13562.                   33.6 13562.        -3.20
+15 prop    edna…  2117       2 13566.                   31.8 13565.        -3.20
+# ℹ abbreviated name: ¹​effective_parameters_waic
+# ℹ 8 more variables: cpo_failures &lt;int&gt;, delta_waic &lt;dbl&gt;, waic_weight &lt;dbl&gt;,
+#   rank_waic &lt;int&gt;, family &lt;chr&gt;, delta_waic_all &lt;dbl&gt;, rank_all &lt;int&gt;,
+#   model_key &lt;chr&gt;</code></pre>
+</div>
+</div>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>best_row <span class="ot">&lt;-</span> combined_ranking <span class="sc">%&gt;%</span> <span class="fu">slice_head</span>(<span class="at">n =</span> <span class="dv">1</span>)</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>best_screen <span class="ot">&lt;-</span> <span class="cf">if</span> (best_row<span class="sc">$</span>family <span class="sc">==</span> <span class="st">"additive subset"</span>) additive_screen <span class="cf">else</span> interaction_screen</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>best_fit <span class="ot">&lt;-</span> best_screen<span class="sc">$</span>fits[[best_row<span class="sc">$</span>model]]</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>best_coefficients <span class="ot">&lt;-</span> tibble<span class="sc">::</span><span class="fu">rownames_to_column</span>(</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>(best_fit<span class="sc">$</span>summary.fixed), <span class="st">"term"</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>best_hyperparameters <span class="ot">&lt;-</span> tibble<span class="sc">::</span><span class="fu">rownames_to_column</span>(</span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">as.data.frame</span>(best_fit<span class="sc">$</span>summary.hyperpar), <span class="st">"parameter"</span></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a><span class="fu">write.csv</span>(best_coefficients, <span class="fu">file.path</span>(output_dir, <span class="st">"distance_time_best_coefficients.csv"</span>), <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a><span class="fu">write.csv</span>(best_hyperparameters, <span class="fu">file.path</span>(output_dir, <span class="st">"distance_time_best_hyperparameters.csv"</span>), <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>best_row</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 1 × 16
+  model    terms     n n_fixed   waic effective_parameters…¹    dic mean_log_cpo
+  &lt;chr&gt;    &lt;chr&gt; &lt;int&gt;   &lt;int&gt;  &lt;dbl&gt;                  &lt;dbl&gt;  &lt;dbl&gt;        &lt;dbl&gt;
+1 full_al… edna…  2117      11 13511.                   41.9 13508.        -3.19
+# ℹ abbreviated name: ¹​effective_parameters_waic
+# ℹ 8 more variables: cpo_failures &lt;int&gt;, delta_waic &lt;dbl&gt;, waic_weight &lt;dbl&gt;,
+#   rank_waic &lt;int&gt;, family &lt;chr&gt;, delta_waic_all &lt;dbl&gt;, rank_all &lt;int&gt;,
+#   model_key &lt;chr&gt;</code></pre>
+</div>
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>best_coefficients</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>                      term        mean         sd  0.025quant    0.5quant
+1              (Intercept) -3.87976490 0.21157232 -4.30697896 -3.87607772
+2              edna_prop_z  0.10170317 0.06666972 -0.02910753  0.10172593
+3              edna_conc_z  0.10958023 0.04909378  0.01331057  0.10957728
+4               distance_z -0.09106518 0.02613212 -0.14231058 -0.09106576
+5                    lag_z -0.05371569 0.02977966 -0.11210757 -0.05371867
+6  edna_prop_z:edna_conc_z -0.08260467 0.03395781 -0.14922590 -0.08259521
+7   edna_prop_z:distance_z  0.04737111 0.04208982 -0.03516039  0.04736784
+8        edna_prop_z:lag_z  0.05932786 0.04060424 -0.02027549  0.05931895
+9   edna_conc_z:distance_z -0.17148616 0.03980039 -0.24953745 -0.17148625
+10       edna_conc_z:lag_z -0.07703089 0.04108454 -0.15761877 -0.07702500
+11        distance_z:lag_z  0.12088165 0.02718338  0.06757016  0.12088264
+     0.975quant        mode          kld
+1  -3.473383698 -3.87613216 5.707923e-08
+2   0.232384415  0.10172607 3.489654e-11
+3   0.205866668  0.10957728 5.522394e-12
+4  -0.039816506 -0.09106576 8.627389e-12
+5   0.004693105 -0.05371868 1.007119e-11
+6  -0.016037299 -0.08259516 2.642697e-11
+7   0.129921191  0.04736783 1.188574e-11
+8   0.138981856  0.05931890 1.830620e-11
+9  -0.093434338 -0.17148625 8.424068e-12
+10  0.003523448 -0.07702497 9.767143e-12
+11  0.174187498  0.12088265 8.719530e-12</code></pre>
+</div>
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>best_hyperparameters</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>                                               parameter      mean         sd
+1 size for the nbinomial observations (1/overdispersion) 1.3708033 0.05138367
+2                               Precision for reef_index 0.7849238 0.22625773
+  0.025quant  0.5quant 0.975quant      mode
+1   1.272392 1.3698534   1.474678 1.3679858
+2   0.427723 0.7557416   1.310572 0.7015895</code></pre>
+</div>
+</div>
+</section>
+<section id="site-level-distance-by-time-predictions" class="level2">
+<h2 class="anchored" data-anchor-id="site-level-distance-by-time-predictions">Site-level distance-by-time predictions</h2>
+<p>The winning formulation is refitted once with prediction rows for the latest eDNA event at each modelled site. Scenarios cover the observed primary support: 0, 200, 500, 1,000, and 2,000 m, and 0, 30, 90, and 183 days after sampling.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>site_scenarios <span class="ot">&lt;-</span> <span class="fu">build_inla_distance_time_scenarios</span>(</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>  edna_obs,</span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">distances_m =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">200</span>, <span class="dv">500</span>, <span class="dv">1000</span>, <span class="dv">2000</span>),</span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">lag_days =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">30</span>, <span class="dv">90</span>, <span class="dv">183</span>)</span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(.data<span class="sc">$</span>Reef <span class="sc">%in%</span> best_screen<span class="sc">$</span>reef_levels)</span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (reuse_screen <span class="sc">&amp;&amp;</span> <span class="fu">file.exists</span>(prediction_path)) {</span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>  site_predictions <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(prediction_path)</span>
+<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a>} <span class="cf">else</span> {</span>
+<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a>  best_prediction <span class="ot">&lt;-</span> <span class="fu">predict_inla_cpue_screen</span>(</span>
+<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a>    best_screen,</span>
+<span id="cb17-13"><a href="#cb17-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">model_name =</span> best_row<span class="sc">$</span>model,</span>
+<span id="cb17-14"><a href="#cb17-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">newdata =</span> site_scenarios,</span>
+<span id="cb17-15"><a href="#cb17-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">num_threads =</span> <span class="st">"2:1"</span></span>
+<span id="cb17-16"><a href="#cb17-16" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb17-17"><a href="#cb17-17" aria-hidden="true" tabindex="-1"></a>  site_predictions <span class="ot">&lt;-</span> best_prediction<span class="sc">$</span>predictions</span>
+<span id="cb17-18"><a href="#cb17-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">saveRDS</span>(site_predictions, prediction_path)</span>
+<span id="cb17-19"><a href="#cb17-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">saveRDS</span>(best_prediction<span class="sc">$</span>fit, <span class="fu">file.path</span>(output_dir, <span class="st">"distance_time_prediction_fit.rds"</span>))</span>
+<span id="cb17-20"><a href="#cb17-20" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb17-21"><a href="#cb17-21" aria-hidden="true" tabindex="-1"></a>site_prediction_table <span class="ot">&lt;-</span> site_predictions <span class="sc">%&gt;%</span></span>
+<span id="cb17-22"><a href="#cb17-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">st_drop_geometry</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb17-23"><a href="#cb17-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(</span>
+<span id="cb17-24"><a href="#cb17-24" aria-hidden="true" tabindex="-1"></a>    scenario_id, Reef, site_name, event_id, date_edna,</span>
+<span id="cb17-25"><a href="#cb17-25" aria-hidden="true" tabindex="-1"></a>    edna_prop_positive, edna_conc_mean,</span>
+<span id="cb17-26"><a href="#cb17-26" aria-hidden="true" tabindex="-1"></a>    edna_distance_m, edna_lag_days,</span>
+<span id="cb17-27"><a href="#cb17-27" aria-hidden="true" tabindex="-1"></a>    cpue_mean, cpue_q025, cpue_q10, cpue_q50, cpue_q90, cpue_q975,</span>
+<span id="cb17-28"><a href="#cb17-28" aria-hidden="true" tabindex="-1"></a>    prob_cpue_gt_002, prob_cpue_gt_004</span>
+<span id="cb17-29"><a href="#cb17-29" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb17-30"><a href="#cb17-30" aria-hidden="true" tabindex="-1"></a><span class="fu">write.csv</span>(</span>
+<span id="cb17-31"><a href="#cb17-31" aria-hidden="true" tabindex="-1"></a>  site_prediction_table,</span>
+<span id="cb17-32"><a href="#cb17-32" aria-hidden="true" tabindex="-1"></a>  <span class="fu">file.path</span>(output_dir, <span class="st">"distance_time_site_predictions.csv"</span>),</span>
+<span id="cb17-33"><a href="#cb17-33" aria-hidden="true" tabindex="-1"></a>  <span class="at">row.names =</span> <span class="cn">FALSE</span></span>
+<span id="cb17-34"><a href="#cb17-34" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb17-35"><a href="#cb17-35" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-36"><a href="#cb17-36" aria-hidden="true" tabindex="-1"></a>site_prediction_table <span class="sc">%&gt;%</span></span>
+<span id="cb17-37"><a href="#cb17-37" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">grepl</span>(<span class="st">"Eyrie"</span>, Reef, <span class="at">ignore.case =</span> <span class="cn">TRUE</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb17-38"><a href="#cb17-38" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(site_name, edna_lag_days, edna_distance_m)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 80 × 17
+   scenario_id            Reef  site_name event_id date_edna  edna_prop_positive
+   &lt;chr&gt;                  &lt;chr&gt; &lt;chr&gt;     &lt;chr&gt;    &lt;date&gt;                  &lt;dbl&gt;
+ 1 Eyrie Reef (14-118)__… Eyri… EREDNA1   Eyrie R… 2025-09-26                  1
+ 2 Eyrie Reef (14-118)__… Eyri… EREDNA1   Eyrie R… 2025-09-26                  1
+ 3 Eyrie Reef (14-118)__… Eyri… EREDNA1   Eyrie R… 2025-09-26                  1
+ 4 Eyrie Reef (14-118)__… Eyri… EREDNA1   Eyrie R… 2025-09-26                  1
+ 5 Eyrie Reef (14-118)__… Eyri… EREDNA1   Eyrie R… 2025-09-26                  1
+ 6 Eyrie Reef (14-118)__… Eyri… EREDNA1   Eyrie R… 2025-09-26                  1
+ 7 Eyrie Reef (14-118)__… Eyri… EREDNA1   Eyrie R… 2025-09-26                  1
+ 8 Eyrie Reef (14-118)__… Eyri… EREDNA1   Eyrie R… 2025-09-26                  1
+ 9 Eyrie Reef (14-118)__… Eyri… EREDNA1   Eyrie R… 2025-09-26                  1
+10 Eyrie Reef (14-118)__… Eyri… EREDNA1   Eyrie R… 2025-09-26                  1
+# ℹ 70 more rows
+# ℹ 11 more variables: edna_conc_mean &lt;dbl&gt;, edna_distance_m &lt;dbl&gt;,
+#   edna_lag_days &lt;dbl&gt;, cpue_mean &lt;dbl&gt;, cpue_q025 &lt;dbl&gt;, cpue_q10 &lt;dbl&gt;,
+#   cpue_q50 &lt;dbl&gt;, cpue_q90 &lt;dbl&gt;, cpue_q975 &lt;dbl&gt;, prob_cpue_gt_002 &lt;dbl&gt;,
+#   prob_cpue_gt_004 &lt;dbl&gt;</code></pre>
+</div>
+</div>
+<p>For comparison, the best additive model is predicted over the identical grid. This is the conservative operational candidate until the interaction surface is confirmed by grouped out-of-sample validation.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>best_additive_name <span class="ot">&lt;-</span> additive_screen<span class="sc">$</span>ranking<span class="sc">$</span>model[[<span class="dv">1</span>]]</span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (reuse_screen <span class="sc">&amp;&amp;</span> <span class="fu">file.exists</span>(additive_prediction_path)) {</span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>  additive_site_predictions <span class="ot">&lt;-</span> <span class="fu">readRDS</span>(additive_prediction_path)</span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>} <span class="cf">else</span> {</span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>  additive_prediction <span class="ot">&lt;-</span> <span class="fu">predict_inla_cpue_screen</span>(</span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>    additive_screen,</span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">model_name =</span> best_additive_name,</span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">newdata =</span> site_scenarios,</span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">num_threads =</span> <span class="st">"2:1"</span></span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a>  additive_site_predictions <span class="ot">&lt;-</span> additive_prediction<span class="sc">$</span>predictions</span>
+<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">saveRDS</span>(additive_site_predictions, additive_prediction_path)</span>
+<span id="cb19-13"><a href="#cb19-13" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb19-14"><a href="#cb19-14" aria-hidden="true" tabindex="-1"></a>additive_site_prediction_table <span class="ot">&lt;-</span> additive_site_predictions <span class="sc">%&gt;%</span></span>
+<span id="cb19-15"><a href="#cb19-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">st_drop_geometry</span>() <span class="sc">%&gt;%</span></span>
+<span id="cb19-16"><a href="#cb19-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(</span>
+<span id="cb19-17"><a href="#cb19-17" aria-hidden="true" tabindex="-1"></a>    scenario_id, Reef, site_name, event_id, date_edna,</span>
+<span id="cb19-18"><a href="#cb19-18" aria-hidden="true" tabindex="-1"></a>    edna_prop_positive, edna_conc_mean,</span>
+<span id="cb19-19"><a href="#cb19-19" aria-hidden="true" tabindex="-1"></a>    edna_distance_m, edna_lag_days,</span>
+<span id="cb19-20"><a href="#cb19-20" aria-hidden="true" tabindex="-1"></a>    cpue_mean, cpue_q025, cpue_q10, cpue_q50, cpue_q90, cpue_q975,</span>
+<span id="cb19-21"><a href="#cb19-21" aria-hidden="true" tabindex="-1"></a>    prob_cpue_gt_002, prob_cpue_gt_004</span>
+<span id="cb19-22"><a href="#cb19-22" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb19-23"><a href="#cb19-23" aria-hidden="true" tabindex="-1"></a><span class="fu">write.csv</span>(</span>
+<span id="cb19-24"><a href="#cb19-24" aria-hidden="true" tabindex="-1"></a>  additive_site_prediction_table,</span>
+<span id="cb19-25"><a href="#cb19-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">file.path</span>(output_dir, <span class="st">"distance_time_additive_site_predictions.csv"</span>),</span>
+<span id="cb19-26"><a href="#cb19-26" aria-hidden="true" tabindex="-1"></a>  <span class="at">row.names =</span> <span class="cn">FALSE</span></span>
+<span id="cb19-27"><a href="#cb19-27" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+</div>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>scenario_summary <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(</span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(site_prediction_table, <span class="at">formulation =</span> <span class="st">"All pairwise interactions (WAIC winner)"</span>),</span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(additive_site_prediction_table, <span class="at">formulation =</span> <span class="st">"Best additive: % positive + distance + lag"</span>)</span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(formulation, edna_lag_days, edna_distance_m) <span class="sc">%&gt;%</span></span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">median_cpue =</span> <span class="fu">median</span>(cpue_mean),</span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">median_q10 =</span> <span class="fu">median</span>(cpue_q10),</span>
+<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">median_q90 =</span> <span class="fu">median</span>(cpue_q90),</span>
+<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">.groups =</span> <span class="st">"drop"</span></span>
+<span id="cb20-11"><a href="#cb20-11" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb20-12"><a href="#cb20-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-13"><a href="#cb20-13" aria-hidden="true" tabindex="-1"></a>p_scenarios <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(</span>
+<span id="cb20-14"><a href="#cb20-14" aria-hidden="true" tabindex="-1"></a>  scenario_summary,</span>
+<span id="cb20-15"><a href="#cb20-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">aes</span>(edna_distance_m, median_cpue)</span>
+<span id="cb20-16"><a href="#cb20-16" aria-hidden="true" tabindex="-1"></a>) <span class="sc">+</span></span>
+<span id="cb20-17"><a href="#cb20-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_ribbon</span>(</span>
+<span id="cb20-18"><a href="#cb20-18" aria-hidden="true" tabindex="-1"></a>    <span class="fu">aes</span>(<span class="at">ymin =</span> median_q10, <span class="at">ymax =</span> median_q90),</span>
+<span id="cb20-19"><a href="#cb20-19" aria-hidden="true" tabindex="-1"></a>    <span class="at">fill =</span> <span class="st">"#3182bd"</span>, <span class="at">alpha =</span> <span class="fl">0.2</span></span>
+<span id="cb20-20"><a href="#cb20-20" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb20-21"><a href="#cb20-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">color =</span> <span class="st">"#08519c"</span>, <span class="at">linewidth =</span> <span class="fl">0.9</span>) <span class="sc">+</span></span>
+<span id="cb20-22"><a href="#cb20-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">color =</span> <span class="st">"#08519c"</span>, <span class="at">size =</span> <span class="dv">2</span>) <span class="sc">+</span></span>
+<span id="cb20-23"><a href="#cb20-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="fl">0.02</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">color =</span> <span class="st">"#fdae6b"</span>) <span class="sc">+</span></span>
+<span id="cb20-24"><a href="#cb20-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="fl">0.04</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">color =</span> <span class="st">"#e6550d"</span>) <span class="sc">+</span></span>
+<span id="cb20-25"><a href="#cb20-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_x_continuous</span>(<span class="at">breaks =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">200</span>, <span class="dv">500</span>, <span class="dv">1000</span>, <span class="dv">2000</span>)) <span class="sc">+</span></span>
+<span id="cb20-26"><a href="#cb20-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_grid</span>(formulation <span class="sc">~</span> edna_lag_days, <span class="at">labeller =</span> label_both) <span class="sc">+</span></span>
+<span id="cb20-27"><a href="#cb20-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb20-28"><a href="#cb20-28" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="st">"Distance from eDNA sample (m)"</span>,</span>
+<span id="cb20-29"><a href="#cb20-29" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="st">"Median site-level expected CPUE"</span>,</span>
+<span id="cb20-30"><a href="#cb20-30" aria-hidden="true" tabindex="-1"></a>    <span class="at">title =</span> <span class="st">"Lightweight INLA distance-by-time scenarios"</span>,</span>
+<span id="cb20-31"><a href="#cb20-31" aria-hidden="true" tabindex="-1"></a>    <span class="at">subtitle =</span> <span class="st">"Panels show days since eDNA sampling; ribbons summarize median site-level 80% intervals"</span></span>
+<span id="cb20-32"><a href="#cb20-32" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb20-33"><a href="#cb20-33" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_bw</span>()</span>
+<span id="cb20-34"><a href="#cb20-34" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(</span>
+<span id="cb20-35"><a href="#cb20-35" aria-hidden="true" tabindex="-1"></a>  <span class="fu">file.path</span>(output_dir, <span class="st">"distance_time_site_predictions.png"</span>),</span>
+<span id="cb20-36"><a href="#cb20-36" aria-hidden="true" tabindex="-1"></a>  p_scenarios, <span class="at">width =</span> <span class="dv">11</span>, <span class="at">height =</span> <span class="dv">9</span>, <span class="at">dpi =</span> <span class="dv">300</span></span>
+<span id="cb20-37"><a href="#cb20-37" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb20-38"><a href="#cb20-38" aria-hidden="true" tabindex="-1"></a>p_scenarios</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</details>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="02_distance_time_formulation_screen_files/figure-html/scenario-plot-1.png" class="img-fluid figure-img" width="1056"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="interpretation-boundary" class="level2">
+<h2 class="anchored" data-anchor-id="interpretation-boundary">Interpretation boundary</h2>
+<p>This screen estimates association and predictive support, not eDNA transport or causal decay. The selected eDNA event is an operational anchor, and alternative nearest-event and 365-day link rules should be sensitivity analyses. The best few formulations should next be refitted in <code>brms</code> with grouped out-of-sample validation and posterior predictive checks before choosing a final model.</p>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+        const codeEl = trigger.previousElementSibling.cloneNode(true);
+        for (const childEl of codeEl.children) {
+          if (isCodeAnnotation(childEl)) {
+            childEl.remove();
+          }
+        }
+        return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

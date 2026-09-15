@@ -4,12 +4,14 @@
 \alias{fit_horizon_glmm}
 \title{Fit Horizon GLMM}
 \usage{
-fit_horizon_glmm(hor_val, dat_glmm)
+fit_horizon_glmm(hor_val, dat_glmm, var_type = "perc")
 }
 \arguments{
-\item{hor_val}{Horizon Value ("3 Months", etc)}
+\item{hor_val}{Horizon Value ("0-3 Months", etc)}
 
 \item{dat_glmm}{Dataset containing modelling inputs.}
+
+\item{var_type}{Type of predictor variable ("perc" for perc_pos_reef, "conc" for conc_t)}
 }
 \value{
 Predictions tibble

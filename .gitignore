@@ -3,6 +3,14 @@
 .RData
 .Ruserdata
 
+# Production INLA caches and fitted objects (recreated by the analysis QMD)
+analysis/inla/output/*.rds
+analysis/brms/output/*.rds
+analysis/brt/output/*.rds
+analysis/ensemble/output/*.rds
+analysis/site/output/*.rds
+analysis/cull_first/output/*.rds
+
 edna_reef_report_2025_files/fontawesome-4.7.0/
 
 edna_reef_report_2025_files/htmltools-fill-0.5.9/

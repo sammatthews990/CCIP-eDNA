@@ -7,7 +7,9 @@
 combine_reef_data(cull_summary, first_day_summary, manta_summary, edna_summary)
 }
 \arguments{
-\item{cull_summary}{Checked and evaluated summarizations for cull.}
+\item{cull_summary}{Checked and evaluated summarizations for cull.
+For temporally correct analysis, cull data should be pre-filtered
+via \code{\link[=filter_cull_post_edna]{filter_cull_post_edna()}} before aggregation.}
 
 \item{first_day_summary}{Scout dive metrics.}
 

@@ -1,0 +1,6 @@
+"design","n_rows","n_reefs","n_edna_events","n_edna_campaigns","n_cull_sites","n_site_visits","duplicated_outcome_rows","median_lag_days","median_distance_m"
+"event_first_single_visit",247,36,247,78,113,138,109,41,777.050331976769
+"event_first_each_site",1304,36,247,78,332,519,785,53,1087.79474550076
+"campaign_first_single_visit",78,36,78,78,64,78,0,39.5,428.520127099364
+"campaign_first_each_site_before_deduplication",522,36,168,78,332,519,3,54.5,694.234157768085
+"unique_campaign_to_next_site_visit",519,36,168,78,332,519,0,53,694.170761915968

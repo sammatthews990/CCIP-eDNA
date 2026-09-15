@@ -1,0 +1,112 @@
+---
+title: "Cull-first individual-dive model"
+subtitle: "Nested site effects and expanded-window sensitivity"
+format:
+  html:
+    toc: true
+    embed-resources: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+library(dplyr)
+library(knitr)
+project_root <- normalizePath(
+  if (file.exists("analysis/cull_first/output/cull_first_glmm_performance.csv")) "." else file.path("..", ".."),
+  winslash = "/", mustWork = TRUE
+)
+output_dir <- file.path(project_root, "analysis", "cull_first", "output")
+glmm <- read.csv(file.path(output_dir, "cull_first_glmm_performance.csv"))
+effects <- read.csv(file.path(output_dir, "cull_first_brms_fixed_effects.csv"))
+coverage <- read.csv(file.path(output_dir, "expanded_window_coverage.csv"))
+expanded_models <- read.csv(file.path(output_dir, "expanded_window_glmm_performance.csv"))
+```
+
+## Interpretation
+
+Both linkage directions are retained because they answer different questions:
+
+- **Cull-first:** every eligible cull dive uses its most recent preceding eDNA
+  event. This retains 2,117 dives but allows one eDNA event to inform multiple
+  later culls.
+- **eDNA-first:** each sampling campaign uses only the first subsequent visit
+  to every cull site. This gives 519 non-duplicated visits but intentionally
+  excludes later visits.
+
+The cull-first hierarchy is:
+
+    COTS count ~ % positive + distance + elapsed time
+                 + offset(log(bottom time))
+                 + (1 | reef) + (1 | cull site) + (1 | eDNA event)
+
+## Grouping screen
+
+```{r}
+kable(glmm |> mutate(across(where(is.numeric), ~ round(.x, 3))))
+```
+
+Adding cull site improves AIC by 288 relative to reef only. Adding the eDNA
+event effect improves AIC by another 277 relative to site-only and prevents
+repeated exposure to one molecular event being treated as independent
+information.
+
+## Cull-first BRMS model
+
+The production fit has 8,000 post-warmup draws, all R-hat values are 1.00, and
+no divergent transitions. Percent positive is clearly positive, elapsed time
+is clearly negative, and the remaining additive distance effect is close to
+zero.
+
+```{r}
+kable(effects |> mutate(across(where(is.numeric), ~ round(.x, 3))))
+```
+
+The marginal 0.04 crossing is approximately 75% positive for cull-first and
+73% for eDNA-first.
+
+```{r}
+#| out-width: 100%
+#| fig-cap: "Comparison of linkage assumptions and posterior summaries for the 2,117-dive cull-first model."
+knitr::include_graphics(file.path(project_root, "plots", "cull_first_brms_four_panel.png"))
+```
+
+## Expanded 5 km / 365-day window
+
+```{r}
+kable(coverage |> mutate(across(where(is.numeric), ~ round(.x, 1))))
+```
+
+The expanded window adds 1,533 dives, nine reefs and 186 sites. Flexible
+distance and time functions are strongly preferred to the original log-linear
+additive formulation.
+
+```{r}
+kable(expanded_models |> mutate(across(where(is.numeric), ~ round(.x, 2))))
+```
+
+The spline degradation model allows the percent-positive association itself to
+change over distance and time. It is favoured by 8.4 AIC units over additive
+splines. The fitted contrast is strongest around 1-2 km and weaker by 5 km,
+rather than declining monotonically from zero distance. At 5 km and 365 days,
+the expected curve is nearly flat and its uncertainty is wide. This may reflect
+signal degradation, but could also reflect cull-site selection relative to
+eDNA locations.
+
+```{r}
+#| out-width: 100%
+#| fig-cap: "Exploratory degradation curves and observation support for the expanded cull-first window. Bands are fixed-effect 95% intervals."
+knitr::include_graphics(file.path(
+  project_root, "plots", "cull_first_expanded_window_assessment.png"
+))
+```
+
+## Recommendation
+
+Retain 2 km / 183 days as the primary operational window for now. The expanded
+window is useful for studying persistence boundaries, but its flexible shape
+should be tested with complete eDNA events held out before operational use.
+Present cull-first and eDNA-first results together as linkage sensitivity
+analyses rather than selecting one solely because it has more rows.

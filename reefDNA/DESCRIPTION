@@ -21,8 +21,15 @@ Imports:
     readxl,
     readr,
     lubridate,
-    stringr
+    stringr,
+    sf,
+    tibble
 Suggests: 
+    brms,
+    INLA,
     knitr,
-    rmarkdown
+    rmarkdown,
+    testthat (>= 3.0.0),
+    xgboost
+Config/testthat/edition: 3
 VignetteBuilder: knitr

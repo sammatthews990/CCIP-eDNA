@@ -1,0 +1,146 @@
+---
+title: "eDNA-first site-visit CPUE model"
+subtitle: "Corrected linkage, hierarchical BRMS, boosted trees and ensemble"
+format:
+  html:
+    toc: true
+    embed-resources: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+library(dplyr)
+library(knitr)
+
+project_root <- normalizePath(
+  if (file.exists("analysis/site/output/edna_first_linkage_audit.csv")) "." else file.path("..", ".."),
+  winslash = "/", mustWork = TRUE
+)
+output_dir <- file.path(project_root, "analysis", "site", "output")
+audit <- read.csv(file.path(output_dir, "edna_first_linkage_audit.csv"))
+glmm <- read.csv(file.path(output_dir, "site_visit_glmm_performance.csv"))
+effects <- read.csv(file.path(output_dir, "site_visit_brms_fixed_effects.csv"))
+performance <- read.csv(file.path(output_dir, "site_visit_model_performance.csv"))
+thresholds <- read.csv(file.path(output_dir, "site_visit_threshold_performance.csv"))
+curve <- read.csv(file.path(output_dir, "site_visit_brms_percent_positive.csv"))
+```
+
+## Corrected observation unit
+
+The previous operational models started from each cull dive and looked
+backwards for an eligible eDNA event. The corrected analysis starts with an
+eDNA sampling campaign and takes the first subsequent visit to every cull site.
+All dives at that site and date are combined into one count and effort total.
+
+Individual eDNA-event reversal would duplicate outcomes. The selected
+campaign-to-site design retains 519 unique response visits with no duplication.
+
+```{r}
+kable(
+  audit |>
+    transmute(
+      Design = design, Rows = n_rows, `eDNA events` = n_edna_events,
+      `Site visits` = n_site_visits,
+      `Duplicated outcomes` = duplicated_outcome_rows,
+      `Median lag (days)` = round(median_lag_days, 1),
+      `Median distance (m)` = round(median_distance_m)
+    )
+)
+```
+
+## Hierarchical model
+
+    COTS count ~ % positive + distance + elapsed time
+                 + offset(log(total bottom time))
+                 + (1 | reef) + (1 | cull site) + (1 | eDNA campaign)
+
+The fast GLMM screen strongly supports retaining all three grouping terms.
+
+```{r}
+kable(
+  glmm |>
+    transmute(
+      Model = model, AIC = round(AIC, 1), `Delta AIC` = round(delta_AIC, 1),
+      `Reef SD` = round(reef_sd, 2), `Site SD` = round(site_sd, 2),
+      `Campaign SD` = round(campaign_sd, 2),
+      `0.04 crossing (%)` = round(crossing_004, 1)
+    )
+)
+```
+
+The production BRMS model retained 8,000 post-warmup draws. All R-hat values
+are 1.00 and it has no divergent transitions. Its 0.04 marginal crossing is
+`r round(approx(curve$expected, curve$edna_pct, xout = 0.04)$y, 1)`% positive.
+
+```{r}
+kable(
+  effects |>
+    transmute(
+      Term = term, Estimate = round(Estimate, 3),
+      `95% lower` = round(Q2.5, 3), `95% upper` = round(Q97.5, 3)
+    )
+)
+```
+
+```{r}
+#| out-width: 100%
+#| fig-cap: "Site-visit BRMS grouping comparison, posterior effects, marginal percent-positive response, and distance-time context."
+knitr::include_graphics(file.path(project_root, "plots", "site_visit_brms_four_panel.png"))
+```
+
+## Boosted trees
+
+The concentration-free Poisson boosted tree was tuned with complete eDNA
+campaigns held out. Its partial-dependence intervals use 100 whole-reef
+bootstrap samples.
+
+```{r}
+#| out-width: 100%
+#| fig-cap: "Site-visit boosted-tree validation, importance and whole-reef bootstrap partial dependence."
+knitr::include_graphics(file.path(project_root, "plots", "site_visit_brt_four_panel.png"))
+```
+
+## Ensemble validation
+
+All model comparisons use the same five complete-campaign holdouts.
+
+```{r}
+kable(performance |> mutate(across(where(is.numeric), ~ round(.x, 3))))
+```
+
+The expected-CPUE ensemble uses 59% BRMS and 41% BRT. Threshold probabilities
+favour BRMS more strongly: 81% at 0.02, 90% at 0.04 and 93% at 0.08.
+
+```{r}
+kable(
+  thresholds |>
+    transmute(
+      Threshold = threshold, Model = model, AUC = round(AUC, 3),
+      Brier = round(Brier, 3), Cutoff = round(cutoff, 2),
+      F1 = round(F1, 3), Recall = round(recall, 3),
+      Precision = round(precision, 3), Specificity = round(specificity, 3),
+      `False negatives` = false_negatives
+    )
+)
+```
+
+```{r}
+#| out-width: 100%
+#| fig-cap: "Complete-campaign held-out assessment of the corrected BRMS, BRT and ensemble."
+knitr::include_graphics(file.path(project_root, "plots", "site_visit_ensemble_assessment.png"))
+```
+
+## Deployment
+
+The versioned object is
+analysis/site/output/reefDNA_site_visit_model_bundle.rds. It accepts percent
+positive, distance, elapsed days, optional effort, reef, cull-site and campaign
+identifiers through reefDNA::predict_reef_cpue().
+
+The primary outputs are calibrated exceedance probabilities and expected CPUE
+with uncertainty. Alert cutoffs maximize F1 on these out-of-fold predictions
+and should remain provisional until the operational costs of false negatives
+and false positives are specified.

@@ -1,0 +1,202 @@
+---
+title: "Shortlisted spatio-temporal CPUE models"
+subtitle: "Model selection and posterior summaries"
+format:
+  html:
+    toc: true
+    embed-resources: true
+    code-fold: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+library(brms)
+library(dplyr)
+library(knitr)
+library(tibble)
+
+project_root <- normalizePath(
+  if (file.exists("analysis/brms/output/brms_selected_final.rds")) "." else file.path("..", ".."),
+  winslash = "/", mustWork = TRUE
+)
+output_dir <- file.path(project_root, "analysis", "brms", "output")
+fit <- readRDS(file.path(output_dir, "brms_selected_final.rds"))
+model_data <- readRDS(file.path(output_dir, "brms_model_data.rds"))
+loo_path <- file.path(output_dir, "brms_loo_targeted_comparison.csv")
+if (!file.exists(loo_path)) loo_path <- file.path(output_dir, "brms_loo_final_comparison.csv")
+loo_results <- read.csv(loo_path)
+kfold_results <- read.csv(file.path(output_dir, "brms_reef_kfold_comparison.csv"))
+fixed_effects <- read.csv(file.path(output_dir, "selected_model_fixed_effects.csv"))
+selection <- read.csv(file.path(output_dir, "selected_model_summary.csv"))
+targeted_comparison <- read.csv(file.path(output_dir, "brms_targeted_vs_selected.csv"))
+transform_comparison <- read.csv(file.path(
+  output_dir, "brms_concentration_transform_comparison.csv"
+))
+transform_summary <- read.csv(file.path(
+  output_dir, "brms_concentration_transform_summary.csv"
+))
+```
+
+## Result
+
+The selected model is the negative-binomial **concentration x distance** model. It includes eDNA percentage positive, mean concentration, distance from the matched eDNA sample, time since that sample, the concentration-by-distance interaction, a log survey-effort offset, and a reef random intercept.
+
+The all-pairwise model ranked first under repaired PSIS-LOO. However, holding out complete reefs reduced its advantage over the concentration-by-distance model to `r round(abs(selection$reef_kfold_delta_vs_all_pairwise), 1)` ELPD (`r round(selection$reef_kfold_delta_se, 1)` SE). Because that difference is negligible relative to its uncertainty, selection followed the pre-specified rule of whole-reef predictive performance followed by parsimony.
+
+A targeted model containing both concentration x distance and percentage-positive x concentration was also fitted. It improved PSIS-LOO over the selected model by only `r round(abs(targeted_comparison$elpd_diff[targeted_comparison$model == "concentration_distance"]), 1)` ELPD (`r round(targeted_comparison$se_diff[targeted_comparison$model == "concentration_distance"], 1)` SE), which does not justify retaining the additional interaction.
+
+```{r}
+shortlist <- tribble(
+  ~model, ~fixed_effects,
+  "Null", "Intercept only",
+  "Best additive", "% positive + distance + time",
+  "Full additive", "% positive + concentration + distance + time",
+  "Concentration x distance", "All main effects + concentration x distance",
+  "Two interactions", "All main effects + concentration x distance + % positive x concentration",
+  "All pairwise", "All main effects + every two-way interaction"
+)
+kable(shortlist, col.names = c("Model", "Fixed-effects formulation"))
+```
+
+All models used a negative-binomial likelihood with a log link, log bottom-time offset, and reef-level random intercept. Predictors were standardized after the analysis transformations: eDNA proportion positive directly, and `log1p` transformations for concentration, distance and elapsed days. The comparison used `r nrow(model_data)` cull observations from `r nlevels(model_data$Reef)` reefs.
+
+## Model comparison
+
+```{r}
+loo_table <- loo_results |>
+  transmute(
+    Model = recode(
+      model,
+      null = "Null",
+      best_additive = "Best additive",
+      full_additive = "Full additive",
+      concentration_distance = "Concentration x distance",
+      dual_interaction = "Two interactions",
+      all_pairwise = "All pairwise"
+    ),
+    `LOO ELPD` = round(elpd_loo, 1),
+    `Difference` = round(elpd_diff, 1),
+    `SE of difference` = round(se_diff, 1)
+  )
+kable(loo_table)
+```
+
+```{r}
+kfold_table <- kfold_results |>
+  transmute(
+    Model = recode(
+      model,
+      concentration_distance = "Concentration x distance",
+      all_pairwise = "All pairwise"
+    ),
+    `Reef-CV ELPD` = round(elpd_kfold, 1),
+    `Difference` = round(elpd_diff, 1),
+    `SE of difference` = round(se_diff, 1)
+  )
+kable(kfold_table)
+```
+
+## Selected-model estimates
+
+```{r}
+effect_table <- fixed_effects |>
+  transmute(
+    Term = term,
+    Median = round(Q50, 3),
+    `80% lower` = round(Q10, 3),
+    `80% upper` = round(Q90, 3),
+    `95% lower` = round(Q2.5, 3),
+    `95% upper` = round(Q97.5, 3)
+  )
+kable(effect_table)
+```
+
+On the standardized log-rate scale, percentage positive has a clearly positive association with CPUE. Distance and time since sampling have negative associations. Mean concentration alone is uncertain at average distance, but its negative interaction with distance is well resolved: the concentration signal attenuates more strongly as the cull location moves away from the eDNA sample.
+
+More specifically, the conditional concentration slope is
+`concentration + (concentration x distance) * distance`. Its posterior median is approximately 0.17 at one standardized distance unit below the transformed mean (about 214 m), 0.04 at the transformed mean (about 567 m), and -0.10 at one unit above it (about 1.2 km). Thus, the positive concentration signal at short range attenuates and becomes uncertain-to-negative at longer range.
+
+In the targeted two-interaction model, the percentage-positive x concentration coefficient was -0.09 (95% credible interval -0.16 to -0.03). This suggests the two eDNA measures partly substitute for one another: percentage positive contributes most when concentration is relatively low. Nevertheless, its negligible LOO improvement means this term is not retained in the primary model.
+
+## Concentration transformation
+
+Mean concentration is modelled as standardized `log1p(mean concentration)`. This was already applied before every shortlisted BRMS fit.
+
+```{r}
+kable(
+  transform_summary |>
+    transmute(
+      Scale = scale,
+      Skewness = round(skewness, 2),
+      Maximum = round(maximum, 2)
+    )
+)
+```
+
+The raw distribution is strongly right-skewed, whereas `log1p` makes it close to symmetric. A like-for-like raw-concentration sensitivity model was slightly better by `r round(abs(transform_comparison$elpd_diff[transform_comparison$model == "log1p_concentration"]), 1)` ELPD, but the difference had an SE of `r round(transform_comparison$se_diff[transform_comparison$model == "log1p_concentration"], 1)`. There is therefore no clear predictive winner. The `log1p` model remains primary because it limits leverage from extreme concentrations; the raw-scale fit is retained as a sensitivity analysis.
+
+## Zero-percent baseline
+
+```{r}
+zero_rows <- sum(model_data$edna_prop_positive == 0)
+zero_positive_rows <- sum(
+  model_data$edna_prop_positive == 0 & model_data$cots_count > 0
+)
+```
+
+An exact CPUE mean of zero at 0% positive is not compatible with these data: `r zero_positive_rows` of the `r zero_rows` matched 0%-positive culls still caught COTS. Under a negative-binomial model, a mean fixed exactly at zero would assign zero probability to every one of those positive observations. It would also imply operationally that a complete eDNA non-detection eliminates COTS risk, despite the observed false negatives.
+
+Instead, the operational plot reports **additional expected CPUE above the modelled 0%-positive baseline**. Each posterior draw has its own 0% expected value subtracted, so the curve and credible interval start exactly at zero without altering or concealing absolute baseline risk. This changes the estimand, not the fitted slope.
+
+```{r}
+fit_summary <- summary(fit)
+diagnostic_blocks <- list(
+  fixed = as.data.frame(fit_summary$fixed),
+  distributional = as.data.frame(fit_summary$spec_pars),
+  reef = as.data.frame(fit_summary$random$Reef)
+)
+diagnostics <- bind_rows(diagnostic_blocks, .id = "block") |>
+  rownames_to_column("parameter")
+nuts <- nuts_params(fit)
+diagnostic_summary <- tibble(
+  `Maximum Rhat` = max(diagnostics$Rhat, na.rm = TRUE),
+  `Minimum bulk ESS` = min(diagnostics$Bulk_ESS, na.rm = TRUE),
+  `Minimum tail ESS` = min(diagnostics$Tail_ESS, na.rm = TRUE),
+  Divergences = sum(nuts$Value[nuts$Parameter == "divergent__"]),
+  `Maximum-treedepth hits` = sum(
+    nuts$Value[nuts$Parameter == "treedepth__"] >= 12
+  )
+)
+kable(diagnostic_summary, digits = 0)
+```
+
+The extended final run used four chains and 12,000 retained posterior draws. Its sampler diagnostics support using the posterior summaries above.
+
+## Paper figure
+
+```{r}
+#| out-width: 100%
+#| fig-cap: "Shortlisted model performance and posterior predictions from the selected concentration-by-distance model. Expected-CPUE bands are 95% credible intervals; the broader band in panel C is a 95% observation-level prediction interval for a cull of median duration (216 minutes). Context curves use 30 versus 183 days and 200 versus 2,000 m."
+knitr::include_graphics(file.path(project_root, "plots", "brms_cpue_four_panel.png"))
+```
+
+Panel B compares standardized coefficients, so its horizontal positions are directly comparable on the log-rate scale. Panels C and D are population-level predictions with the reef random effect excluded. Panel C holds the remaining transformed predictors at their means. Panel D varies the requested short and long time-distance combinations while holding mean concentration at its transformed mean.
+
+These are predictive associations from observationally matched samples; they should not be interpreted as causal effects of distance or elapsed time. Prediction intervals are necessarily much wider than credible intervals because they include negative-binomial variability in a future cull observation.
+
+## Operational figure
+
+```{r}
+#| out-width: 100%
+#| fig-cap: "Operational alternative with panel C expressed as additional expected CPUE above the 0%-positive baseline. The absolute-risk figure above should be retained wherever false-negative risk or observation-level prediction intervals matter."
+knitr::include_graphics(file.path(
+  project_root, "plots", "brms_cpue_four_panel_operational.png"
+))
+```
+
+## Reproducibility
+
+The model-fitting entry point is `analysis/brms/fit_shortlist.R`; the targeted interaction evaluation is in `analysis/brms/evaluate_targeted_interaction.R`; the transformation sensitivity model is in `analysis/brms/test_concentration_transform.R`; whole-reef validation is in `analysis/brms/grouped_kfold.R`; and all figure data and plots are regenerated by `analysis/brms/make_summary_plots.R`. Posterior fit objects remain excluded from version control because of their size, while compact CSV summaries and the publication figures are retained.

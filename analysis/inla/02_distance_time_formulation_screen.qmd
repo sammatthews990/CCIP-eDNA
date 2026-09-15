@@ -1,0 +1,330 @@
+---
+title: "INLA screen: eDNA signal, distance, and time since sampling"
+author: "Sam Matthews"
+format:
+  html:
+    toc: true
+    code-fold: true
+execute:
+  warning: false
+  message: false
+---
+
+## Purpose
+
+This fast first pass asks a narrower operational question than the full SPDE
+benchmark: how well do eDNA percent positive, mean concentration, distance from
+the eDNA sampling event, and days since that event explain subsequent COTS cull
+counts? Spatial and temporal context enter directly through distance and lag.
+All models retain one response per cull dive, use a negative-binomial likelihood
+with effort offset, and include a reef random intercept. No calendar-year or
+GBR-wide latent spatial field is fitted.
+
+```{r setup}
+library(dplyr)
+library(ggplot2)
+library(readxl)
+library(sf)
+
+project_root <- normalizePath(
+  if (file.exists("data/eDNA data_ALL_20260528.xlsx")) "." else file.path("..", ".."),
+  winslash = "/", mustWork = TRUE
+)
+devtools::load_all(file.path(project_root, "reefDNA"))
+output_dir <- file.path(project_root, "analysis", "inla", "output")
+dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+additive_path <- file.path(output_dir, "distance_time_additive_screen.rds")
+interaction_path <- file.path(output_dir, "distance_time_interaction_screen.rds")
+prediction_path <- file.path(output_dir, "distance_time_site_predictions.rds")
+additive_prediction_path <- file.path(output_dir, "distance_time_additive_site_predictions.rds")
+refit_screen <- identical(tolower(Sys.getenv("REEFDNA_REFIT_SCREEN", "false")), "true")
+reuse_screen <- !refit_screen && file.exists(additive_path) && file.exists(interaction_path)
+set.seed(20260908)
+```
+
+## Operational eDNA-event linkage
+
+Each cull is paired with its most recent eligible prior eDNA event on the same
+reef and within 2,000 m and 183 days. Replicates within that event supply percent
+positive and mean concentration. If multiple events have the same lag, the
+nearest site is selected. This rule is fixed before inspecting CPUE.
+
+```{r event-linkage}
+stage_a <- readRDS(file.path(output_dir, "stage_a_inla_model.rds"))
+raw_links <- readRDS(file.path(output_dir, "space_time_links.rds"))
+edna_raw <- read_excel(
+  file.path(project_root, "data", "eDNA data_ALL_20260528.xlsx"),
+  sheet = "eDNA_data_ALL"
+)
+edna_obs <- prepare_inla_edna(edna_raw, crs_projected = 3112)
+
+event_benchmark <- summarise_inla_event_benchmark(
+  raw_links, edna_obs, stage_a$benchmark
+)
+stopifnot(
+  nrow(event_benchmark) == dplyr::n_distinct(event_benchmark$cull_id),
+  min(event_benchmark$edna_lag_days) >= 0,
+  max(event_benchmark$edna_lag_days) <= 183,
+  max(event_benchmark$edna_distance_m) <= 2000
+)
+saveRDS(event_benchmark, file.path(output_dir, "event_benchmark_data.rds"))
+
+event_audit <- sf::st_drop_geometry(event_benchmark) %>%
+  summarise(
+    n_unique_culls = n(),
+    n_reefs = n_distinct(Reef),
+    n_edna_events_selected = n_distinct(event_id),
+    median_replicates_per_event_link = median(edna_n_replicates),
+    median_distance_m = median(edna_distance_m),
+    max_distance_m = max(edna_distance_m),
+    median_lag_days = median(edna_lag_days),
+    max_lag_days = max(edna_lag_days)
+  )
+write.csv(event_audit, file.path(output_dir, "event_linkage_audit.csv"), row.names = FALSE)
+event_audit
+```
+
+## All additive subsets
+
+The four continuous predictors are transformed and standardized once, then the
+same complete observations are used for all 16 additive subsets (including the
+reef-only null model). Concentration uses `log1p`; distance uses
+`log1p(distance / 200)`; lag uses `log1p(days)`.
+
+```{r additive-screen}
+if (reuse_screen) {
+  additive_screen <- readRDS(additive_path)
+} else {
+  additive_screen <- fit_inla_cpue_candidates(
+    event_benchmark,
+    candidates = build_inla_additive_candidates(),
+    include_vessel = FALSE,
+    num_threads = "2:1"
+  )
+  saveRDS(additive_screen, additive_path)
+}
+write.csv(
+  additive_screen$ranking,
+  file.path(output_dir, "distance_time_additive_ranking.csv"),
+  row.names = FALSE
+)
+additive_screen$ranking
+```
+
+## Hierarchical interaction screen
+
+Interactions are tested only with all corresponding main effects retained. Six
+models add one pairwise interaction at a time; a final model includes all six
+pairwise interactions. Higher-order interactions are deferred because they are
+hard to interpret and are more likely to fit sampling idiosyncrasies.
+
+```{r interaction-screen}
+if (reuse_screen) {
+  interaction_screen <- readRDS(interaction_path)
+} else {
+  interaction_screen <- fit_inla_cpue_candidates(
+    event_benchmark,
+    candidates = build_inla_interaction_candidates(),
+    include_vessel = FALSE,
+    num_threads = "2:1"
+  )
+  saveRDS(interaction_screen, interaction_path)
+}
+write.csv(
+  interaction_screen$ranking,
+  file.path(output_dir, "distance_time_interaction_ranking.csv"),
+  row.names = FALSE
+)
+interaction_screen$ranking
+```
+
+## Combined ranking and supported effects
+
+WAIC is the primary fast ranking criterion; mean log CPO is retained as an
+observation-level predictive check. A later `brms` analysis should validate the
+shortlist using grouped cross-validation by reef or sampling event rather than
+selecting solely on in-sample information criteria.
+
+```{r combined-ranking, fig.width=9, fig.height=7}
+combined_ranking <- bind_rows(
+  mutate(additive_screen$ranking, family = "additive subset"),
+  mutate(interaction_screen$ranking, family = "hierarchical interaction")
+) %>%
+  arrange(waic) %>%
+  mutate(
+    delta_waic_all = waic - min(waic),
+    rank_all = row_number(),
+    model_key = paste(family, model, sep = " :: ")
+  )
+write.csv(
+  combined_ranking,
+  file.path(output_dir, "distance_time_combined_ranking.csv"),
+  row.names = FALSE
+)
+
+p_rank <- combined_ranking %>%
+  slice_head(n = 15) %>%
+  mutate(model_key = reorder(model_key, delta_waic_all)) %>%
+  ggplot(aes(delta_waic_all, model_key, color = family)) +
+  geom_point(size = 2.8) +
+  geom_vline(xintercept = c(2, 7), linetype = "dashed", color = "grey55") +
+  labs(
+    x = expression(Delta * "WAIC from best formulation"), y = NULL,
+    title = "Fast INLA formulation screen",
+    subtitle = "Negative-binomial counts with effort offset and reef iid intercept"
+  ) +
+  theme_bw()
+ggsave(
+  file.path(output_dir, "distance_time_model_ranking.png"),
+  p_rank, width = 9, height = 7, dpi = 300
+)
+p_rank
+combined_ranking %>% slice_head(n = 15)
+```
+
+```{r best-coefficients}
+best_row <- combined_ranking %>% slice_head(n = 1)
+best_screen <- if (best_row$family == "additive subset") additive_screen else interaction_screen
+best_fit <- best_screen$fits[[best_row$model]]
+best_coefficients <- tibble::rownames_to_column(
+  as.data.frame(best_fit$summary.fixed), "term"
+)
+best_hyperparameters <- tibble::rownames_to_column(
+  as.data.frame(best_fit$summary.hyperpar), "parameter"
+)
+write.csv(best_coefficients, file.path(output_dir, "distance_time_best_coefficients.csv"), row.names = FALSE)
+write.csv(best_hyperparameters, file.path(output_dir, "distance_time_best_hyperparameters.csv"), row.names = FALSE)
+best_row
+best_coefficients
+best_hyperparameters
+```
+
+## Site-level distance-by-time predictions
+
+The winning formulation is refitted once with prediction rows for the latest
+eDNA event at each modelled site. Scenarios cover the observed primary support:
+0, 200, 500, 1,000, and 2,000 m, and 0, 30, 90, and 183 days after sampling.
+
+```{r scenario-predictions}
+site_scenarios <- build_inla_distance_time_scenarios(
+  edna_obs,
+  distances_m = c(0, 200, 500, 1000, 2000),
+  lag_days = c(0, 30, 90, 183)
+) %>%
+  filter(.data$Reef %in% best_screen$reef_levels)
+
+if (reuse_screen && file.exists(prediction_path)) {
+  site_predictions <- readRDS(prediction_path)
+} else {
+  best_prediction <- predict_inla_cpue_screen(
+    best_screen,
+    model_name = best_row$model,
+    newdata = site_scenarios,
+    num_threads = "2:1"
+  )
+  site_predictions <- best_prediction$predictions
+  saveRDS(site_predictions, prediction_path)
+  saveRDS(best_prediction$fit, file.path(output_dir, "distance_time_prediction_fit.rds"))
+}
+site_prediction_table <- site_predictions %>%
+  st_drop_geometry() %>%
+  select(
+    scenario_id, Reef, site_name, event_id, date_edna,
+    edna_prop_positive, edna_conc_mean,
+    edna_distance_m, edna_lag_days,
+    cpue_mean, cpue_q025, cpue_q10, cpue_q50, cpue_q90, cpue_q975,
+    prob_cpue_gt_002, prob_cpue_gt_004
+  )
+write.csv(
+  site_prediction_table,
+  file.path(output_dir, "distance_time_site_predictions.csv"),
+  row.names = FALSE
+)
+
+site_prediction_table %>%
+  filter(grepl("Eyrie", Reef, ignore.case = TRUE)) %>%
+  arrange(site_name, edna_lag_days, edna_distance_m)
+```
+
+For comparison, the best additive model is predicted over the identical grid.
+This is the conservative operational candidate until the interaction surface is
+confirmed by grouped out-of-sample validation.
+
+```{r additive-scenario-predictions}
+best_additive_name <- additive_screen$ranking$model[[1]]
+if (reuse_screen && file.exists(additive_prediction_path)) {
+  additive_site_predictions <- readRDS(additive_prediction_path)
+} else {
+  additive_prediction <- predict_inla_cpue_screen(
+    additive_screen,
+    model_name = best_additive_name,
+    newdata = site_scenarios,
+    num_threads = "2:1"
+  )
+  additive_site_predictions <- additive_prediction$predictions
+  saveRDS(additive_site_predictions, additive_prediction_path)
+}
+additive_site_prediction_table <- additive_site_predictions %>%
+  st_drop_geometry() %>%
+  select(
+    scenario_id, Reef, site_name, event_id, date_edna,
+    edna_prop_positive, edna_conc_mean,
+    edna_distance_m, edna_lag_days,
+    cpue_mean, cpue_q025, cpue_q10, cpue_q50, cpue_q90, cpue_q975,
+    prob_cpue_gt_002, prob_cpue_gt_004
+  )
+write.csv(
+  additive_site_prediction_table,
+  file.path(output_dir, "distance_time_additive_site_predictions.csv"),
+  row.names = FALSE
+)
+```
+
+```{r scenario-plot, fig.width=11, fig.height=9}
+scenario_summary <- bind_rows(
+  mutate(site_prediction_table, formulation = "All pairwise interactions (WAIC winner)"),
+  mutate(additive_site_prediction_table, formulation = "Best additive: % positive + distance + lag")
+) %>%
+  group_by(formulation, edna_lag_days, edna_distance_m) %>%
+  summarise(
+    median_cpue = median(cpue_mean),
+    median_q10 = median(cpue_q10),
+    median_q90 = median(cpue_q90),
+    .groups = "drop"
+  )
+
+p_scenarios <- ggplot(
+  scenario_summary,
+  aes(edna_distance_m, median_cpue)
+) +
+  geom_ribbon(
+    aes(ymin = median_q10, ymax = median_q90),
+    fill = "#3182bd", alpha = 0.2
+  ) +
+  geom_line(color = "#08519c", linewidth = 0.9) +
+  geom_point(color = "#08519c", size = 2) +
+  geom_hline(yintercept = 0.02, linetype = "dashed", color = "#fdae6b") +
+  geom_hline(yintercept = 0.04, linetype = "dashed", color = "#e6550d") +
+  scale_x_continuous(breaks = c(0, 200, 500, 1000, 2000)) +
+  facet_grid(formulation ~ edna_lag_days, labeller = label_both) +
+  labs(
+    x = "Distance from eDNA sample (m)",
+    y = "Median site-level expected CPUE",
+    title = "Lightweight INLA distance-by-time scenarios",
+    subtitle = "Panels show days since eDNA sampling; ribbons summarize median site-level 80% intervals"
+  ) +
+  theme_bw()
+ggsave(
+  file.path(output_dir, "distance_time_site_predictions.png"),
+  p_scenarios, width = 11, height = 9, dpi = 300
+)
+p_scenarios
+```
+
+## Interpretation boundary
+
+This screen estimates association and predictive support, not eDNA transport or
+causal decay. The selected eDNA event is an operational anchor, and alternative
+nearest-event and 365-day link rules should be sensitivity analyses. The best
+few formulations should next be refitted in `brms` with grouped out-of-sample
+validation and posterior predictive checks before choosing a final model.

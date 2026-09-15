@@ -1110,14 +1110,15 @@ Below, ground truth CPUE is partitioned into three management tiers:
 2. **Worthwhile Near Miss ($0.02 \le \text{CPUE} < 0.04$)**: Moderate / building COTS populations.
 3. **Clean Reef ($\text{CPUE} < 0.02$)**: Low / zero COTS.
 
-```{r near-miss-cm, fig.width=8.5, fig.height=6.5, fig.cap="Single-plot 3-tier confusion matrix for CPUE ≥ 0.04 target using the CV-tuned optimal threshold for Composite eDNA Index (Index* ≈ 27.5). Ground truth CPUE is partitioned into Target Actionable (≥ 0.04), Worthwhile Near Miss (0.02 ≤ CPUE < 0.04), and Low/Zero CPUE (< 0.02) to contextualize early detection value."}
+```{r near-miss-cm, fig.width=8.5, fig.height=6.5, fig.cap="Single-plot 3-tier confusion matrix for the CPUE ≥ 0.04 target using the CV-tuned optimal Composite eDNA Index threshold. Ground truth CPUE is partitioned into Target Actionable (≥ 0.04), Worthwhile Near Miss (0.02 ≤ CPUE < 0.04), and Low/Zero CPUE (< 0.02) to contextualize early detection value."}
 # Target CPUE = 0.04
 thr_star_04 <- summary_table_combo %>% filter(abs(cpue_thr - 0.04) < 1e-4) %>% pull(thr_star)
-if (length(thr_star_04) == 0) thr_star_04 <- 27.5
+stopifnot(length(thr_star_04) == 1, is.finite(thr_star_04))
 
 df_near_miss <- dat_evt %>%
     mutate(
-        pred = factor(if_else(combo_index >= thr_star_04[1], "Predicted Positive (Index ≥ Index*)", "Predicted Negative (Index < Index*)"),
+        alert = combo_index >= thr_star_04,
+        pred = factor(if_else(alert, "Predicted Positive (Index ≥ Index*)", "Predicted Negative (Index < Index*)"),
                       levels = c("Predicted Positive (Index ≥ Index*)", "Predicted Negative (Index < Index*)")),
         actual_tier = factor(case_when(
             cpue >= 0.04 ~ "High CPUE (≥ 0.04)\n[Action Target]",
@@ -1127,6 +1128,15 @@ df_near_miss <- dat_evt %>%
                       "Near Miss (0.02 ≤ CPUE < 0.04)\n[Worthwhile Early Detection]", 
                       "Low CPUE (< 0.02)\n[Clean Reef]"))
     )
+
+n_alerts <- sum(df_near_miss$alert)
+n_useful_alerts <- sum(df_near_miss$alert & df_near_miss$cpue >= 0.02)
+n_binary_fp <- sum(df_near_miss$alert & df_near_miss$cpue < 0.04)
+n_near_miss_alerts <- sum(df_near_miss$alert & df_near_miss$cpue >= 0.02 & df_near_miss$cpue < 0.04)
+operational_subtitle <- sprintf(
+    "%d/%d alerts were actionable or worthwhile; %d/%d apparent binary false positives were worthwhile near misses.",
+    n_useful_alerts, n_alerts, n_near_miss_alerts, n_binary_fp
+)
 
 tbl_nm <- table(actual = df_near_miss$actual_tier, pred = df_near_miss$pred)
 df_tbl_nm <- as.data.frame(tbl_nm) %>%
@@ -1146,7 +1156,7 @@ p_near_miss <- ggplot(df_tbl_nm, aes(x = pred, y = actual, fill = row_prop)) +
         x = sprintf("Prediction (Composite eDNA Index Threshold* = %.1f)", thr_star_04[1]),
         y = "Ground Truth CPUE Tiers",
         title = "3-Tier Confusion Matrix (CPUE Target ≥ 0.04 with Near Miss 0.02–0.04 Tier)",
-        subtitle = "Demonstrating that eDNA positive predictions on moderate density reefs (0.02–0.04 CPUE) represent worthwhile early detection."
+        subtitle = operational_subtitle
     ) +
     coord_fixed(ratio = 0.55) +
     theme_bw(base_family = "Helvetica") +
@@ -1212,10 +1222,10 @@ cull_sf <- cull %>%
     st_transform(3112)
 ```
 
-We generate buffers drawn iteratively radially outward (`200m, 500m, 1km, 2km, 3km, 5km`), isolate matching Culls occurring inside those rings within a 6-month prior trace window, and test CPUE prediction capabilities over regimes.
+We generate buffers drawn iteratively radially outward (`200m, 500m, 1km, 2km`), isolate matching Culls occurring inside those rings within a 6-month prior trace window, and test CPUE prediction capabilities over regimes.
 
 ```{r spatial-buffers, fig.width=12, fig.height=8, message=FALSE, warning=FALSE}
-buffer_radii <- c(200, 500, 1000, 2000, 3000, 5000)
+buffer_radii <- c(200, 500, 1000, 2000)
 spatial_results <- list()
 
 for (dist_m in buffer_radii) {
@@ -1269,7 +1279,7 @@ if (!is.null(res_02)) {
 }
 ```
 
-### Bootstrapped Spatial Metric Decay Across Buffer Distances (200m – 5000m)
+### Bootstrapped Spatial Metric Decay Across Buffer Distances (200m – 2000m)
 
 We evaluate the classification metrics (**Accuracy**, **F1 Score**, **Precision**, **Recall**, **FPR**, **FNR**) across spatial buffer radii using 100 bootstrap iterations (mean line + 95% confidence ribbon) focused on key management targets (`CPUE ≥ 0.02` and `CPUE ≥ 0.04`).
 
@@ -1338,13 +1348,13 @@ p_boot_decay <- ggplot(df_boot, aes(x = radius, y = mean_val, color = Metric, fi
     geom_point(size = 2.5) +
     geom_vline(xintercept = 1000, linetype = "dashed", color = "darkred", linewidth = 0.8) +
     facet_grid(Metric ~ cpue_target, scales = "free_y") +
-    scale_x_continuous(breaks = buffer_radii, labels = c("200m", "500m", "1km", "2km", "3km", "5km")) +
+    scale_x_continuous(breaks = buffer_radii, labels = c("200m", "500m", "1km", "2km")) +
     scale_color_viridis_d(option = "turbo") +
     scale_fill_viridis_d(option = "turbo") +
     labs(
         x = "Spatial Buffer Radius Around eDNA Site",
         y = "Metric Score (Bootstrapped 95% CI)",
-        title = "Spatial Classification Metric Decay Across Buffer Radii (200m – 5000m)"
+        title = "Spatial Classification Metric Decay Across Buffer Radii (200m – 2000m)"
     ) +
     theme_bw(base_family = "Helvetica") +
     theme(
@@ -1358,53 +1368,100 @@ ggsave("plots/spatial_metric_decay_bootstrapped.png", p_boot_decay, width = 10, 
 p_boot_decay
 ```
 
-### Case Study: Eyrie Reef (14-118) Satellite Map & 200m Buffer Extents
+### Case Study: Eyrie Reef (14-118) Satellite Map & 2000m Buffer Extents
 
-To visualize physical overlap between eDNA sampling stations and COTS control operations, we map **Eyrie Reef (14-118)** over high-resolution satellite imagery (`Esri.WorldImagery`) using canonical reef boundary geometry (`data/rrap_canonical_2025-03-20-T15-18-17.gpkg`) and transparent orange COTS cull site boxes (`data/Eotr_CotsCullSites_2025_11_19_1_58_PM.gpkg`). Buffer rings around eDNA sampling stations are bounded up to **200m**.
+To visualize physical overlap between eDNA sampling stations and COTS control operations, we map **Eyrie Reef (14-118)** over high-resolution satellite imagery (`Esri.WorldImagery`) using canonical reef boundary geometry (`data/rrap_canonical_2025-03-20-T15-18-17.gpkg`) and transparent orange COTS cull site boxes (`data/Eotr_CotsCullSites_2025_11_19_1_58_PM.gpkg`). Buffer rings around eDNA sampling stations are shown at **200m, 500m, 1000m, and 2000m**.
 
-```{r eyrie-buffer-map, fig.width=10, fig.height=7.5, message=FALSE, warning=FALSE, fig.cap="High-resolution satellite map of Eyrie Reef (14-118) showing canonical reef outline (cyan dashed line), active COTS cull sites (transparent orange boxes), eDNA sampling stations (yellow points), and spatial buffer rings up to 200m."}
-library(ggspatial)
+```{r eyrie-buffer-map, fig.width=10, fig.height=7.5, message=FALSE, warning=FALSE, fig.cap="High-resolution satellite map of Eyrie Reef (14-118) showing the canonical reef outline, transparent orange COTS cull-site polygons, dissolved distance bands at 200m, 500m, 1000m, and 2000m, and eDNA sites coloured from blue to red by percent positive."}
+library(maptiles)
+library(tidyterra)
 
 reef_canonical <- read_sf("data/rrap_canonical_2025-03-20-T15-18-17.gpkg") %>% st_transform(4326)
 cull_sites_gpkg <- read_sf("data/Eotr_CotsCullSites_2025_11_19_1_58_PM.gpkg") %>% st_transform(4326)
 
 eyrie_reef_poly <- reef_canonical %>% filter(grepl("Eyrie", reef_name, ignore.case = TRUE) | grepl("14-118", GBRMPA_ID, ignore.case = TRUE))
 
-eyrie_pts <- edna_sf %>% filter(grepl("Eyrie", Reef, ignore.case = TRUE)) %>% st_transform(4326)
-eyrie_site_agg <- eyrie_pts %>%
+eyrie_pts_projected <- edna_sf %>% filter(grepl("Eyrie", Reef, ignore.case = TRUE))
+eyrie_site_agg_projected <- eyrie_pts_projected %>%
     group_by(Site_name) %>%
-    summarise(geometry = st_centroid(st_union(geometry)), .groups = "drop")
+    summarise(
+        perc_pos = weighted.mean(perc_pos, w = n_samples, na.rm = TRUE),
+        n_samples = sum(n_samples),
+        geometry = st_centroid(st_union(geometry)),
+        .groups = "drop"
+    )
 
-eyrie_bbox_sf <- st_as_sfc(st_bbox(st_buffer(st_transform(eyrie_reef_poly, 3112), 1500))) %>% st_transform(4326)
-cull_eyrie_boxes <- st_intersection(cull_sites_gpkg, eyrie_bbox_sf)
+eyrie_radii <- c(200, 500, 1000, 2000)
+eyrie_buffer_labels <- c("0–200m", "200–500m", "500–1000m", "1000–2000m")
+eyrie_site_union <- st_union(eyrie_site_agg_projected)
+eyrie_cumulative_buffers <- lapply(eyrie_radii, function(r) st_buffer(eyrie_site_union, dist = r))
+eyrie_buffer_bands <- Map(
+    function(current, previous) {
+        if (is.null(previous)) current else st_difference(current, previous)
+    },
+    eyrie_cumulative_buffers,
+    c(list(NULL), eyrie_cumulative_buffers[-length(eyrie_cumulative_buffers)])
+)
+eyrie_buffer_bands_projected <- st_sf(
+    buffer_band = factor(eyrie_buffer_labels, levels = eyrie_buffer_labels),
+    geometry = do.call(c, eyrie_buffer_bands)
+)
+eyrie_site_agg <- st_transform(eyrie_site_agg_projected, 4326)
+eyrie_buffer_bands <- st_transform(eyrie_buffer_bands_projected, 4326)
 
-radii_200 <- c(50, 100, 150, 200)
-eyrie_rings_200 <- st_sf(
-    radius = factor(rep(paste0(radii_200, "m"), each = nrow(eyrie_site_agg)), levels = paste0(radii_200, "m")),
-    geometry = do.call(c, lapply(radii_200, function(r) {
-        st_geometry(st_buffer(st_transform(eyrie_site_agg, 3112), dist = r) %>% st_transform(4326))
-    })),
-    crs = 4326
+# Derive the display extent in metres so the full 2000m rings are retained.
+eyrie_map_extent <- st_as_sfc(st_bbox(st_buffer(eyrie_cumulative_buffers[[4]], 250))) %>%
+    st_transform(4326)
+eyrie_map_bbox <- st_bbox(eyrie_map_extent)
+cull_eyrie_boxes <- suppressWarnings(st_intersection(cull_sites_gpkg, eyrie_map_extent))
+eyrie_satellite <- get_tiles(
+    eyrie_map_extent,
+    provider = "Esri.WorldImagery",
+    crop = TRUE,
+    zoom = 15
 )
 
 p_eyrie_sat_map <- ggplot() +
-    annotation_map_tile(type = "esri_world_imagery", zoom = 15) +
+    geom_spatraster_rgb(data = eyrie_satellite) +
+    geom_sf(
+        data = eyrie_buffer_bands,
+        aes(fill = buffer_band),
+        color = "white",
+        linewidth = 0.3,
+        alpha = 0.20
+    ) +
     geom_sf(data = eyrie_reef_poly, fill = NA, color = "cyan", linewidth = 0.9, linetype = "dashed") +
-    geom_sf(data = cull_eyrie_boxes, fill = alpha("orange", 0.35), color = "darkorange", linewidth = 0.4) +
-    geom_sf(data = eyrie_rings_200, aes(color = radius), fill = NA, linewidth = 0.8) +
-    geom_sf(data = eyrie_site_agg, fill = "yellow", color = "black", shape = 21, size = 3.5, stroke = 1.2) +
-    scale_color_manual(
-        name = "eDNA Buffer Radius",
-        values = c("50m" = "#fee08b", "100m" = "#fdae61", "150m" = "#f46d43", "200m" = "#d53e4f")
+    geom_sf(data = cull_eyrie_boxes, fill = alpha("orange", 0.35), color = "darkorange", linewidth = 0.4, show.legend = FALSE) +
+    geom_sf(data = eyrie_site_agg, color = "black", size = 5.0, shape = 16, show.legend = FALSE) +
+    geom_sf(data = eyrie_site_agg, aes(color = perc_pos), size = 3.7, shape = 16) +
+    scale_fill_manual(
+        name = "Dissolved buffer band",
+        values = c(
+            "0–200m" = "#ffffcc",
+            "200–500m" = "#c2e699",
+            "500–1000m" = "#78c679",
+            "1000–2000m" = "#238443"
+        )
+    ) +
+    scale_color_gradient2(
+        name = "eDNA samples\n% positive",
+        low = "#2166ac",
+        mid = "#f7f7f7",
+        high = "#b2182b",
+        midpoint = 50,
+        limits = c(0, 100),
+        breaks = c(0, 25, 50, 75, 100)
     ) +
     coord_sf(
-        xlim = c(st_bbox(eyrie_reef_poly)["xmin"] - 0.003, st_bbox(eyrie_reef_poly)["xmax"] + 0.003),
-        ylim = c(st_bbox(eyrie_reef_poly)["ymin"] - 0.003, st_bbox(eyrie_reef_poly)["ymax"] + 0.003),
+        crs = st_crs(4326),
+        default_crs = st_crs(4326),
+        xlim = unname(c(eyrie_map_bbox["xmin"], eyrie_map_bbox["xmax"])),
+        ylim = unname(c(eyrie_map_bbox["ymin"], eyrie_map_bbox["ymax"])),
         expand = FALSE
     ) +
     labs(
-        title = "Eyrie Reef (14-118) Satellite Map & eDNA Buffer Extents (50m - 200m)",
-        subtitle = "Canonical reef outline (cyan), COTS cull sites (transparent orange boxes), and site buffers up to 200m",
+        title = "Eyrie Reef (14-118): eDNA Signal and Dissolved Buffer Bands",
+        subtitle = "Site % positive (blue–red), COTS cull polygons (orange), and 200–2000m distance bands",
         x = "Longitude", y = "Latitude"
     ) +
     theme_bw(base_family = "Helvetica") +
@@ -1414,7 +1471,8 @@ p_eyrie_sat_map <- ggplot() +
         plot.subtitle = element_text(size = 9.5, color = "grey20")
     )
 
-ggsave("plots/eyrie_reef_satellite_200m.png", p_eyrie_sat_map, width = 10, height = 7.5, dpi = 300)
+ggsave("plots/eyrie_reef_buffer_map.png", p_eyrie_sat_map, width = 10, height = 7.5, dpi = 300)
+ggsave("plots/eyrie_reef_satellite_2000m.png", p_eyrie_sat_map, width = 10, height = 7.5, dpi = 300)
 p_eyrie_sat_map
 ```
 

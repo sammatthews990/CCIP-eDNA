@@ -4,16 +4,18 @@
 \alias{get_prior_cohort}
 \title{Get Prior Cohort}
 \usage{
-get_prior_cohort(culls, ednas, win_days, label)
+get_prior_cohort(culls, ednas, win_days, label, min_days = 0)
 }
 \arguments{
 \item{culls}{Cull dataset}
 
 \item{ednas}{eDNA dataset}
 
-\item{win_days}{Window}
+\item{win_days}{Maximum window in days}
 
 \item{label}{Label string}
+
+\item{min_days}{Minimum window in days (default 0)}
 }
 \value{
 Data frame

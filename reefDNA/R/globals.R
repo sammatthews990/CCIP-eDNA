@@ -20,3 +20,9 @@ utils::globalVariables(c(
   "max_density_class", "initial_cpue", "max_cpue", "last_cpue", "total_hrs",
   "n_dives", "first_date", "last_date", "n_closed"
 ))
+
+#' Internal package imports
+#'
+#' @importFrom stats quantile
+#' @noRd
+NULL

@@ -143,8 +143,8 @@ window.Quarto = {
   </ul></li>
   <li><a href="#site-level-spatial-buffer-analysis" id="toc-site-level-spatial-buffer-analysis" class="nav-link" data-scroll-target="#site-level-spatial-buffer-analysis">10. Site-Level Spatial Buffer Analysis</a>
   <ul class="collapse">
-  <li><a href="#bootstrapped-spatial-metric-decay-across-buffer-distances-200m-5000m" id="toc-bootstrapped-spatial-metric-decay-across-buffer-distances-200m-5000m" class="nav-link" data-scroll-target="#bootstrapped-spatial-metric-decay-across-buffer-distances-200m-5000m">Bootstrapped Spatial Metric Decay Across Buffer Distances (200m – 5000m)</a></li>
-  <li><a href="#case-study-eyrie-reef-14-118-satellite-map-200m-buffer-extents" id="toc-case-study-eyrie-reef-14-118-satellite-map-200m-buffer-extents" class="nav-link" data-scroll-target="#case-study-eyrie-reef-14-118-satellite-map-200m-buffer-extents">Case Study: Eyrie Reef (14-118) Satellite Map &amp; 200m Buffer Extents</a></li>
+  <li><a href="#bootstrapped-spatial-metric-decay-across-buffer-distances-200m-2000m" id="toc-bootstrapped-spatial-metric-decay-across-buffer-distances-200m-2000m" class="nav-link" data-scroll-target="#bootstrapped-spatial-metric-decay-across-buffer-distances-200m-2000m">Bootstrapped Spatial Metric Decay Across Buffer Distances (200m – 2000m)</a></li>
+  <li><a href="#case-study-eyrie-reef-14-118-satellite-map-2000m-buffer-extents" id="toc-case-study-eyrie-reef-14-118-satellite-map-2000m-buffer-extents" class="nav-link" data-scroll-target="#case-study-eyrie-reef-14-118-satellite-map-2000m-buffer-extents">Case Study: Eyrie Reef (14-118) Satellite Map &amp; 2000m Buffer Extents</a></li>
   <li><a href="#interpretation-of-spatial-validation-metrics" id="toc-interpretation-of-spatial-validation-metrics" class="nav-link" data-scroll-target="#interpretation-of-spatial-validation-metrics">Interpretation of Spatial Validation Metrics</a></li>
   </ul></li>
   <li><a href="#error-analysis-false-positives-false-negatives-spatial-distance-decay" id="toc-error-analysis-false-positives-false-negatives-spatial-distance-decay" class="nav-link" data-scroll-target="#error-analysis-false-positives-false-negatives-spatial-distance-decay">11. Error Analysis: False Positives, False Negatives &amp; Spatial Distance Decay</a>
@@ -1634,58 +1634,68 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
 <summary>Code</summary>
 <div class="sourceCode cell-code" id="cb27"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Target CPUE = 0.04</span></span>
 <span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>thr_star_04 <span class="ot">&lt;-</span> summary_table_combo <span class="sc">%&gt;%</span> <span class="fu">filter</span>(<span class="fu">abs</span>(cpue_thr <span class="sc">-</span> <span class="fl">0.04</span>) <span class="sc">&lt;</span> <span class="fl">1e-4</span>) <span class="sc">%&gt;%</span> <span class="fu">pull</span>(thr_star)</span>
-<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="fu">length</span>(thr_star_04) <span class="sc">==</span> <span class="dv">0</span>) thr_star_04 <span class="ot">&lt;-</span> <span class="fl">27.5</span></span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a><span class="fu">stopifnot</span>(<span class="fu">length</span>(thr_star_04) <span class="sc">==</span> <span class="dv">1</span>, <span class="fu">is.finite</span>(thr_star_04))</span>
 <span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a>df_near_miss <span class="ot">&lt;-</span> dat_evt <span class="sc">%&gt;%</span></span>
 <span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(</span>
-<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a>        <span class="at">pred =</span> <span class="fu">factor</span>(<span class="fu">if_else</span>(combo_index <span class="sc">&gt;=</span> thr_star_04[<span class="dv">1</span>], <span class="st">"Predicted Positive (Index ≥ Index*)"</span>, <span class="st">"Predicted Negative (Index &lt; Index*)"</span>),</span>
-<span id="cb27-8"><a href="#cb27-8" aria-hidden="true" tabindex="-1"></a>                      <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"Predicted Positive (Index ≥ Index*)"</span>, <span class="st">"Predicted Negative (Index &lt; Index*)"</span>)),</span>
-<span id="cb27-9"><a href="#cb27-9" aria-hidden="true" tabindex="-1"></a>        <span class="at">actual_tier =</span> <span class="fu">factor</span>(<span class="fu">case_when</span>(</span>
-<span id="cb27-10"><a href="#cb27-10" aria-hidden="true" tabindex="-1"></a>            cpue <span class="sc">&gt;=</span> <span class="fl">0.04</span> <span class="sc">~</span> <span class="st">"High CPUE (≥ 0.04)</span><span class="sc">\n</span><span class="st">[Action Target]"</span>,</span>
-<span id="cb27-11"><a href="#cb27-11" aria-hidden="true" tabindex="-1"></a>            cpue <span class="sc">&gt;=</span> <span class="fl">0.02</span> <span class="sc">&amp;</span> cpue <span class="sc">&lt;</span> <span class="fl">0.04</span> <span class="sc">~</span> <span class="st">"Near Miss (0.02 ≤ CPUE &lt; 0.04)</span><span class="sc">\n</span><span class="st">[Worthwhile Early Detection]"</span>,</span>
-<span id="cb27-12"><a href="#cb27-12" aria-hidden="true" tabindex="-1"></a>            <span class="cn">TRUE</span> <span class="sc">~</span> <span class="st">"Low CPUE (&lt; 0.02)</span><span class="sc">\n</span><span class="st">[Clean Reef]"</span></span>
-<span id="cb27-13"><a href="#cb27-13" aria-hidden="true" tabindex="-1"></a>        ), <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"High CPUE (≥ 0.04)</span><span class="sc">\n</span><span class="st">[Action Target]"</span>, </span>
-<span id="cb27-14"><a href="#cb27-14" aria-hidden="true" tabindex="-1"></a>                      <span class="st">"Near Miss (0.02 ≤ CPUE &lt; 0.04)</span><span class="sc">\n</span><span class="st">[Worthwhile Early Detection]"</span>, </span>
-<span id="cb27-15"><a href="#cb27-15" aria-hidden="true" tabindex="-1"></a>                      <span class="st">"Low CPUE (&lt; 0.02)</span><span class="sc">\n</span><span class="st">[Clean Reef]"</span>))</span>
-<span id="cb27-16"><a href="#cb27-16" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb27-17"><a href="#cb27-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-18"><a href="#cb27-18" aria-hidden="true" tabindex="-1"></a>tbl_nm <span class="ot">&lt;-</span> <span class="fu">table</span>(<span class="at">actual =</span> df_near_miss<span class="sc">$</span>actual_tier, <span class="at">pred =</span> df_near_miss<span class="sc">$</span>pred)</span>
-<span id="cb27-19"><a href="#cb27-19" aria-hidden="true" tabindex="-1"></a>df_tbl_nm <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(tbl_nm) <span class="sc">%&gt;%</span></span>
-<span id="cb27-20"><a href="#cb27-20" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(actual) <span class="sc">%&gt;%</span></span>
-<span id="cb27-21"><a href="#cb27-21" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(</span>
-<span id="cb27-22"><a href="#cb27-22" aria-hidden="true" tabindex="-1"></a>        <span class="at">row_total =</span> <span class="fu">sum</span>(Freq),</span>
-<span id="cb27-23"><a href="#cb27-23" aria-hidden="true" tabindex="-1"></a>        <span class="at">row_prop  =</span> <span class="fu">if_else</span>(row_total <span class="sc">&gt;</span> <span class="dv">0</span>, Freq <span class="sc">/</span> row_total, <span class="dv">0</span>),</span>
-<span id="cb27-24"><a href="#cb27-24" aria-hidden="true" tabindex="-1"></a>        <span class="at">label     =</span> <span class="fu">sprintf</span>(<span class="st">"%d</span><span class="sc">\n</span><span class="st">(%.1f%%)"</span>, Freq, row_prop <span class="sc">*</span> <span class="dv">100</span>)</span>
-<span id="cb27-25"><a href="#cb27-25" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">%&gt;%</span></span>
-<span id="cb27-26"><a href="#cb27-26" aria-hidden="true" tabindex="-1"></a>    <span class="fu">ungroup</span>()</span>
+<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a>        <span class="at">alert =</span> combo_index <span class="sc">&gt;=</span> thr_star_04,</span>
+<span id="cb27-8"><a href="#cb27-8" aria-hidden="true" tabindex="-1"></a>        <span class="at">pred =</span> <span class="fu">factor</span>(<span class="fu">if_else</span>(alert, <span class="st">"Predicted Positive (Index ≥ Index*)"</span>, <span class="st">"Predicted Negative (Index &lt; Index*)"</span>),</span>
+<span id="cb27-9"><a href="#cb27-9" aria-hidden="true" tabindex="-1"></a>                      <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"Predicted Positive (Index ≥ Index*)"</span>, <span class="st">"Predicted Negative (Index &lt; Index*)"</span>)),</span>
+<span id="cb27-10"><a href="#cb27-10" aria-hidden="true" tabindex="-1"></a>        <span class="at">actual_tier =</span> <span class="fu">factor</span>(<span class="fu">case_when</span>(</span>
+<span id="cb27-11"><a href="#cb27-11" aria-hidden="true" tabindex="-1"></a>            cpue <span class="sc">&gt;=</span> <span class="fl">0.04</span> <span class="sc">~</span> <span class="st">"High CPUE (≥ 0.04)</span><span class="sc">\n</span><span class="st">[Action Target]"</span>,</span>
+<span id="cb27-12"><a href="#cb27-12" aria-hidden="true" tabindex="-1"></a>            cpue <span class="sc">&gt;=</span> <span class="fl">0.02</span> <span class="sc">&amp;</span> cpue <span class="sc">&lt;</span> <span class="fl">0.04</span> <span class="sc">~</span> <span class="st">"Near Miss (0.02 ≤ CPUE &lt; 0.04)</span><span class="sc">\n</span><span class="st">[Worthwhile Early Detection]"</span>,</span>
+<span id="cb27-13"><a href="#cb27-13" aria-hidden="true" tabindex="-1"></a>            <span class="cn">TRUE</span> <span class="sc">~</span> <span class="st">"Low CPUE (&lt; 0.02)</span><span class="sc">\n</span><span class="st">[Clean Reef]"</span></span>
+<span id="cb27-14"><a href="#cb27-14" aria-hidden="true" tabindex="-1"></a>        ), <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">"High CPUE (≥ 0.04)</span><span class="sc">\n</span><span class="st">[Action Target]"</span>, </span>
+<span id="cb27-15"><a href="#cb27-15" aria-hidden="true" tabindex="-1"></a>                      <span class="st">"Near Miss (0.02 ≤ CPUE &lt; 0.04)</span><span class="sc">\n</span><span class="st">[Worthwhile Early Detection]"</span>, </span>
+<span id="cb27-16"><a href="#cb27-16" aria-hidden="true" tabindex="-1"></a>                      <span class="st">"Low CPUE (&lt; 0.02)</span><span class="sc">\n</span><span class="st">[Clean Reef]"</span>))</span>
+<span id="cb27-17"><a href="#cb27-17" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb27-18"><a href="#cb27-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-19"><a href="#cb27-19" aria-hidden="true" tabindex="-1"></a>n_alerts <span class="ot">&lt;-</span> <span class="fu">sum</span>(df_near_miss<span class="sc">$</span>alert)</span>
+<span id="cb27-20"><a href="#cb27-20" aria-hidden="true" tabindex="-1"></a>n_useful_alerts <span class="ot">&lt;-</span> <span class="fu">sum</span>(df_near_miss<span class="sc">$</span>alert <span class="sc">&amp;</span> df_near_miss<span class="sc">$</span>cpue <span class="sc">&gt;=</span> <span class="fl">0.02</span>)</span>
+<span id="cb27-21"><a href="#cb27-21" aria-hidden="true" tabindex="-1"></a>n_binary_fp <span class="ot">&lt;-</span> <span class="fu">sum</span>(df_near_miss<span class="sc">$</span>alert <span class="sc">&amp;</span> df_near_miss<span class="sc">$</span>cpue <span class="sc">&lt;</span> <span class="fl">0.04</span>)</span>
+<span id="cb27-22"><a href="#cb27-22" aria-hidden="true" tabindex="-1"></a>n_near_miss_alerts <span class="ot">&lt;-</span> <span class="fu">sum</span>(df_near_miss<span class="sc">$</span>alert <span class="sc">&amp;</span> df_near_miss<span class="sc">$</span>cpue <span class="sc">&gt;=</span> <span class="fl">0.02</span> <span class="sc">&amp;</span> df_near_miss<span class="sc">$</span>cpue <span class="sc">&lt;</span> <span class="fl">0.04</span>)</span>
+<span id="cb27-23"><a href="#cb27-23" aria-hidden="true" tabindex="-1"></a>operational_subtitle <span class="ot">&lt;-</span> <span class="fu">sprintf</span>(</span>
+<span id="cb27-24"><a href="#cb27-24" aria-hidden="true" tabindex="-1"></a>    <span class="st">"%d/%d alerts were actionable or worthwhile; %d/%d apparent binary false positives were worthwhile near misses."</span>,</span>
+<span id="cb27-25"><a href="#cb27-25" aria-hidden="true" tabindex="-1"></a>    n_useful_alerts, n_alerts, n_near_miss_alerts, n_binary_fp</span>
+<span id="cb27-26"><a href="#cb27-26" aria-hidden="true" tabindex="-1"></a>)</span>
 <span id="cb27-27"><a href="#cb27-27" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-28"><a href="#cb27-28" aria-hidden="true" tabindex="-1"></a>p_near_miss <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(df_tbl_nm, <span class="fu">aes</span>(<span class="at">x =</span> pred, <span class="at">y =</span> actual, <span class="at">fill =</span> row_prop)) <span class="sc">+</span></span>
-<span id="cb27-29"><a href="#cb27-29" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_tile</span>(<span class="at">color =</span> <span class="st">"grey80"</span>, <span class="at">linewidth =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
-<span id="cb27-30"><a href="#cb27-30" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_text</span>(<span class="fu">aes</span>(<span class="at">label =</span> label), <span class="at">size =</span> <span class="fl">4.2</span>, <span class="at">fontface =</span> <span class="st">"bold"</span>, <span class="at">color =</span> <span class="st">"black"</span>) <span class="sc">+</span></span>
-<span id="cb27-31"><a href="#cb27-31" aria-hidden="true" tabindex="-1"></a>    <span class="fu">scale_fill_gradient</span>(<span class="at">low =</span> <span class="st">"white"</span>, <span class="at">high =</span> <span class="st">"#6a51a3"</span>, <span class="at">limits =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>), <span class="at">name =</span> <span class="st">"Row Rate"</span>) <span class="sc">+</span></span>
-<span id="cb27-32"><a href="#cb27-32" aria-hidden="true" tabindex="-1"></a>    <span class="fu">labs</span>(</span>
-<span id="cb27-33"><a href="#cb27-33" aria-hidden="true" tabindex="-1"></a>        <span class="at">x =</span> <span class="fu">sprintf</span>(<span class="st">"Prediction (Composite eDNA Index Threshold* = %.1f)"</span>, thr_star_04[<span class="dv">1</span>]),</span>
-<span id="cb27-34"><a href="#cb27-34" aria-hidden="true" tabindex="-1"></a>        <span class="at">y =</span> <span class="st">"Ground Truth CPUE Tiers"</span>,</span>
-<span id="cb27-35"><a href="#cb27-35" aria-hidden="true" tabindex="-1"></a>        <span class="at">title =</span> <span class="st">"3-Tier Confusion Matrix (CPUE Target ≥ 0.04 with Near Miss 0.02–0.04 Tier)"</span>,</span>
-<span id="cb27-36"><a href="#cb27-36" aria-hidden="true" tabindex="-1"></a>        <span class="at">subtitle =</span> <span class="st">"Demonstrating that eDNA positive predictions on moderate density reefs (0.02–0.04 CPUE) represent worthwhile early detection."</span></span>
-<span id="cb27-37"><a href="#cb27-37" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">+</span></span>
-<span id="cb27-38"><a href="#cb27-38" aria-hidden="true" tabindex="-1"></a>    <span class="fu">coord_fixed</span>(<span class="at">ratio =</span> <span class="fl">0.55</span>) <span class="sc">+</span></span>
-<span id="cb27-39"><a href="#cb27-39" aria-hidden="true" tabindex="-1"></a>    <span class="fu">theme_bw</span>(<span class="at">base_family =</span> <span class="st">"Helvetica"</span>) <span class="sc">+</span></span>
-<span id="cb27-40"><a href="#cb27-40" aria-hidden="true" tabindex="-1"></a>    <span class="fu">theme</span>(</span>
-<span id="cb27-41"><a href="#cb27-41" aria-hidden="true" tabindex="-1"></a>        <span class="at">plot.title =</span> <span class="fu">element_text</span>(<span class="at">face =</span> <span class="st">"bold"</span>, <span class="at">size =</span> <span class="dv">12</span>),</span>
-<span id="cb27-42"><a href="#cb27-42" aria-hidden="true" tabindex="-1"></a>        <span class="at">plot.subtitle =</span> <span class="fu">element_text</span>(<span class="at">size =</span> <span class="dv">9</span>, <span class="at">color =</span> <span class="st">"grey25"</span>),</span>
-<span id="cb27-43"><a href="#cb27-43" aria-hidden="true" tabindex="-1"></a>        <span class="at">axis.text.y =</span> <span class="fu">element_text</span>(<span class="at">size =</span> <span class="fl">9.5</span>, <span class="at">face =</span> <span class="st">"bold"</span>),</span>
-<span id="cb27-44"><a href="#cb27-44" aria-hidden="true" tabindex="-1"></a>        <span class="at">axis.text.x =</span> <span class="fu">element_text</span>(<span class="at">size =</span> <span class="fl">9.5</span>, <span class="at">face =</span> <span class="st">"bold"</span>)</span>
-<span id="cb27-45"><a href="#cb27-45" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb27-46"><a href="#cb27-46" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-47"><a href="#cb27-47" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="st">"plots/near_miss_confusion_matrix.png"</span>, p_near_miss, <span class="at">width =</span> <span class="fl">8.5</span>, <span class="at">height =</span> <span class="fl">6.5</span>, <span class="at">dpi =</span> <span class="dv">300</span>)</span>
-<span id="cb27-48"><a href="#cb27-48" aria-hidden="true" tabindex="-1"></a>p_near_miss</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb27-28"><a href="#cb27-28" aria-hidden="true" tabindex="-1"></a>tbl_nm <span class="ot">&lt;-</span> <span class="fu">table</span>(<span class="at">actual =</span> df_near_miss<span class="sc">$</span>actual_tier, <span class="at">pred =</span> df_near_miss<span class="sc">$</span>pred)</span>
+<span id="cb27-29"><a href="#cb27-29" aria-hidden="true" tabindex="-1"></a>df_tbl_nm <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(tbl_nm) <span class="sc">%&gt;%</span></span>
+<span id="cb27-30"><a href="#cb27-30" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(actual) <span class="sc">%&gt;%</span></span>
+<span id="cb27-31"><a href="#cb27-31" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(</span>
+<span id="cb27-32"><a href="#cb27-32" aria-hidden="true" tabindex="-1"></a>        <span class="at">row_total =</span> <span class="fu">sum</span>(Freq),</span>
+<span id="cb27-33"><a href="#cb27-33" aria-hidden="true" tabindex="-1"></a>        <span class="at">row_prop  =</span> <span class="fu">if_else</span>(row_total <span class="sc">&gt;</span> <span class="dv">0</span>, Freq <span class="sc">/</span> row_total, <span class="dv">0</span>),</span>
+<span id="cb27-34"><a href="#cb27-34" aria-hidden="true" tabindex="-1"></a>        <span class="at">label     =</span> <span class="fu">sprintf</span>(<span class="st">"%d</span><span class="sc">\n</span><span class="st">(%.1f%%)"</span>, Freq, row_prop <span class="sc">*</span> <span class="dv">100</span>)</span>
+<span id="cb27-35"><a href="#cb27-35" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">%&gt;%</span></span>
+<span id="cb27-36"><a href="#cb27-36" aria-hidden="true" tabindex="-1"></a>    <span class="fu">ungroup</span>()</span>
+<span id="cb27-37"><a href="#cb27-37" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-38"><a href="#cb27-38" aria-hidden="true" tabindex="-1"></a>p_near_miss <span class="ot">&lt;-</span> <span class="fu">ggplot</span>(df_tbl_nm, <span class="fu">aes</span>(<span class="at">x =</span> pred, <span class="at">y =</span> actual, <span class="at">fill =</span> row_prop)) <span class="sc">+</span></span>
+<span id="cb27-39"><a href="#cb27-39" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_tile</span>(<span class="at">color =</span> <span class="st">"grey80"</span>, <span class="at">linewidth =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
+<span id="cb27-40"><a href="#cb27-40" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_text</span>(<span class="fu">aes</span>(<span class="at">label =</span> label), <span class="at">size =</span> <span class="fl">4.2</span>, <span class="at">fontface =</span> <span class="st">"bold"</span>, <span class="at">color =</span> <span class="st">"black"</span>) <span class="sc">+</span></span>
+<span id="cb27-41"><a href="#cb27-41" aria-hidden="true" tabindex="-1"></a>    <span class="fu">scale_fill_gradient</span>(<span class="at">low =</span> <span class="st">"white"</span>, <span class="at">high =</span> <span class="st">"#6a51a3"</span>, <span class="at">limits =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>), <span class="at">name =</span> <span class="st">"Row Rate"</span>) <span class="sc">+</span></span>
+<span id="cb27-42"><a href="#cb27-42" aria-hidden="true" tabindex="-1"></a>    <span class="fu">labs</span>(</span>
+<span id="cb27-43"><a href="#cb27-43" aria-hidden="true" tabindex="-1"></a>        <span class="at">x =</span> <span class="fu">sprintf</span>(<span class="st">"Prediction (Composite eDNA Index Threshold* = %.1f)"</span>, thr_star_04[<span class="dv">1</span>]),</span>
+<span id="cb27-44"><a href="#cb27-44" aria-hidden="true" tabindex="-1"></a>        <span class="at">y =</span> <span class="st">"Ground Truth CPUE Tiers"</span>,</span>
+<span id="cb27-45"><a href="#cb27-45" aria-hidden="true" tabindex="-1"></a>        <span class="at">title =</span> <span class="st">"3-Tier Confusion Matrix (CPUE Target ≥ 0.04 with Near Miss 0.02–0.04 Tier)"</span>,</span>
+<span id="cb27-46"><a href="#cb27-46" aria-hidden="true" tabindex="-1"></a>        <span class="at">subtitle =</span> operational_subtitle</span>
+<span id="cb27-47"><a href="#cb27-47" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">+</span></span>
+<span id="cb27-48"><a href="#cb27-48" aria-hidden="true" tabindex="-1"></a>    <span class="fu">coord_fixed</span>(<span class="at">ratio =</span> <span class="fl">0.55</span>) <span class="sc">+</span></span>
+<span id="cb27-49"><a href="#cb27-49" aria-hidden="true" tabindex="-1"></a>    <span class="fu">theme_bw</span>(<span class="at">base_family =</span> <span class="st">"Helvetica"</span>) <span class="sc">+</span></span>
+<span id="cb27-50"><a href="#cb27-50" aria-hidden="true" tabindex="-1"></a>    <span class="fu">theme</span>(</span>
+<span id="cb27-51"><a href="#cb27-51" aria-hidden="true" tabindex="-1"></a>        <span class="at">plot.title =</span> <span class="fu">element_text</span>(<span class="at">face =</span> <span class="st">"bold"</span>, <span class="at">size =</span> <span class="dv">12</span>),</span>
+<span id="cb27-52"><a href="#cb27-52" aria-hidden="true" tabindex="-1"></a>        <span class="at">plot.subtitle =</span> <span class="fu">element_text</span>(<span class="at">size =</span> <span class="dv">9</span>, <span class="at">color =</span> <span class="st">"grey25"</span>),</span>
+<span id="cb27-53"><a href="#cb27-53" aria-hidden="true" tabindex="-1"></a>        <span class="at">axis.text.y =</span> <span class="fu">element_text</span>(<span class="at">size =</span> <span class="fl">9.5</span>, <span class="at">face =</span> <span class="st">"bold"</span>),</span>
+<span id="cb27-54"><a href="#cb27-54" aria-hidden="true" tabindex="-1"></a>        <span class="at">axis.text.x =</span> <span class="fu">element_text</span>(<span class="at">size =</span> <span class="fl">9.5</span>, <span class="at">face =</span> <span class="st">"bold"</span>)</span>
+<span id="cb27-55"><a href="#cb27-55" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb27-56"><a href="#cb27-56" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-57"><a href="#cb27-57" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="st">"plots/near_miss_confusion_matrix.png"</span>, p_near_miss, <span class="at">width =</span> <span class="fl">8.5</span>, <span class="at">height =</span> <span class="fl">6.5</span>, <span class="at">dpi =</span> <span class="dv">300</span>)</span>
+<span id="cb27-58"><a href="#cb27-58" aria-hidden="true" tabindex="-1"></a>p_near_miss</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="eDNA_CPUE_Comparison_pkg_files/figure-html/near-miss-cm-1.png" class="img-fluid figure-img" width="816"></p>
-<figcaption>Single-plot 3-tier confusion matrix for CPUE ≥ 0.04 target using the CV-tuned optimal threshold for Composite eDNA Index (Index* ≈ 27.5). Ground truth CPUE is partitioned into Target Actionable (≥ 0.04), Worthwhile Near Miss (0.02 ≤ CPUE &lt; 0.04), and Low/Zero CPUE (&lt; 0.02) to contextualize early detection value.</figcaption>
+<figcaption>Single-plot 3-tier confusion matrix for the CPUE ≥ 0.04 target using the CV-tuned optimal Composite eDNA Index threshold. Ground truth CPUE is partitioned into Target Actionable (≥ 0.04), Worthwhile Near Miss (0.02 ≤ CPUE &lt; 0.04), and Low/Zero CPUE (&lt; 0.02) to contextualize early detection value.</figcaption>
 </figure>
 </div>
 </div>
@@ -1742,11 +1752,11 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
 <span id="cb28-41"><a href="#cb28-41" aria-hidden="true" tabindex="-1"></a>    <span class="fu">st_transform</span>(<span class="dv">3112</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
-<p>We generate buffers drawn iteratively radially outward (<code>200m, 500m, 1km, 2km, 3km, 5km</code>), isolate matching Culls occurring inside those rings within a 6-month prior trace window, and test CPUE prediction capabilities over regimes.</p>
+<p>We generate buffers drawn iteratively radially outward (<code>200m, 500m, 1km, 2km</code>), isolate matching Culls occurring inside those rings within a 6-month prior trace window, and test CPUE prediction capabilities over regimes.</p>
 <div class="cell">
 <details class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>buffer_radii <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">200</span>, <span class="dv">500</span>, <span class="dv">1000</span>, <span class="dv">2000</span>, <span class="dv">3000</span>, <span class="dv">5000</span>)</span>
+<div class="sourceCode cell-code" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>buffer_radii <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">200</span>, <span class="dv">500</span>, <span class="dv">1000</span>, <span class="dv">2000</span>)</span>
 <span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>spatial_results <span class="ot">&lt;-</span> <span class="fu">list</span>()</span>
 <span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (dist_m <span class="cf">in</span> buffer_radii) {</span>
@@ -1808,8 +1818,8 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
 <pre><code>NULL</code></pre>
 </div>
 </div>
-<section id="bootstrapped-spatial-metric-decay-across-buffer-distances-200m-5000m" class="level3">
-<h3 class="anchored" data-anchor-id="bootstrapped-spatial-metric-decay-across-buffer-distances-200m-5000m">Bootstrapped Spatial Metric Decay Across Buffer Distances (200m – 5000m)</h3>
+<section id="bootstrapped-spatial-metric-decay-across-buffer-distances-200m-2000m" class="level3">
+<h3 class="anchored" data-anchor-id="bootstrapped-spatial-metric-decay-across-buffer-distances-200m-2000m">Bootstrapped Spatial Metric Decay Across Buffer Distances (200m – 2000m)</h3>
 <p>We evaluate the classification metrics (<strong>Accuracy</strong>, <strong>F1 Score</strong>, <strong>Precision</strong>, <strong>Recall</strong>, <strong>FPR</strong>, <strong>FNR</strong>) across spatial buffer radii using 100 bootstrap iterations (mean line + 95% confidence ribbon) focused on key management targets (<code>CPUE ≥ 0.02</code> and <code>CPUE ≥ 0.04</code>).</p>
 <div class="cell">
 <details class="code-fold">
@@ -1878,13 +1888,13 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
 <span id="cb33-62"><a href="#cb33-62" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_point</span>(<span class="at">size =</span> <span class="fl">2.5</span>) <span class="sc">+</span></span>
 <span id="cb33-63"><a href="#cb33-63" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_vline</span>(<span class="at">xintercept =</span> <span class="dv">1000</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">color =</span> <span class="st">"darkred"</span>, <span class="at">linewidth =</span> <span class="fl">0.8</span>) <span class="sc">+</span></span>
 <span id="cb33-64"><a href="#cb33-64" aria-hidden="true" tabindex="-1"></a>    <span class="fu">facet_grid</span>(Metric <span class="sc">~</span> cpue_target, <span class="at">scales =</span> <span class="st">"free_y"</span>) <span class="sc">+</span></span>
-<span id="cb33-65"><a href="#cb33-65" aria-hidden="true" tabindex="-1"></a>    <span class="fu">scale_x_continuous</span>(<span class="at">breaks =</span> buffer_radii, <span class="at">labels =</span> <span class="fu">c</span>(<span class="st">"200m"</span>, <span class="st">"500m"</span>, <span class="st">"1km"</span>, <span class="st">"2km"</span>, <span class="st">"3km"</span>, <span class="st">"5km"</span>)) <span class="sc">+</span></span>
+<span id="cb33-65"><a href="#cb33-65" aria-hidden="true" tabindex="-1"></a>    <span class="fu">scale_x_continuous</span>(<span class="at">breaks =</span> buffer_radii, <span class="at">labels =</span> <span class="fu">c</span>(<span class="st">"200m"</span>, <span class="st">"500m"</span>, <span class="st">"1km"</span>, <span class="st">"2km"</span>)) <span class="sc">+</span></span>
 <span id="cb33-66"><a href="#cb33-66" aria-hidden="true" tabindex="-1"></a>    <span class="fu">scale_color_viridis_d</span>(<span class="at">option =</span> <span class="st">"turbo"</span>) <span class="sc">+</span></span>
 <span id="cb33-67"><a href="#cb33-67" aria-hidden="true" tabindex="-1"></a>    <span class="fu">scale_fill_viridis_d</span>(<span class="at">option =</span> <span class="st">"turbo"</span>) <span class="sc">+</span></span>
 <span id="cb33-68"><a href="#cb33-68" aria-hidden="true" tabindex="-1"></a>    <span class="fu">labs</span>(</span>
 <span id="cb33-69"><a href="#cb33-69" aria-hidden="true" tabindex="-1"></a>        <span class="at">x =</span> <span class="st">"Spatial Buffer Radius Around eDNA Site"</span>,</span>
 <span id="cb33-70"><a href="#cb33-70" aria-hidden="true" tabindex="-1"></a>        <span class="at">y =</span> <span class="st">"Metric Score (Bootstrapped 95% CI)"</span>,</span>
-<span id="cb33-71"><a href="#cb33-71" aria-hidden="true" tabindex="-1"></a>        <span class="at">title =</span> <span class="st">"Spatial Classification Metric Decay Across Buffer Radii (200m – 5000m)"</span></span>
+<span id="cb33-71"><a href="#cb33-71" aria-hidden="true" tabindex="-1"></a>        <span class="at">title =</span> <span class="st">"Spatial Classification Metric Decay Across Buffer Radii (200m – 2000m)"</span></span>
 <span id="cb33-72"><a href="#cb33-72" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">+</span></span>
 <span id="cb33-73"><a href="#cb33-73" aria-hidden="true" tabindex="-1"></a>    <span class="fu">theme_bw</span>(<span class="at">base_family =</span> <span class="st">"Helvetica"</span>) <span class="sc">+</span></span>
 <span id="cb33-74"><a href="#cb33-74" aria-hidden="true" tabindex="-1"></a>    <span class="fu">theme</span>(</span>
@@ -1906,71 +1916,87 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
 </div>
 </div>
 </section>
-<section id="case-study-eyrie-reef-14-118-satellite-map-200m-buffer-extents" class="level3">
-<h3 class="anchored" data-anchor-id="case-study-eyrie-reef-14-118-satellite-map-200m-buffer-extents">Case Study: Eyrie Reef (14-118) Satellite Map &amp; 200m Buffer Extents</h3>
-<p>To visualize physical overlap between eDNA sampling stations and COTS control operations, we map <strong>Eyrie Reef (14-118)</strong> over high-resolution satellite imagery (<code>Esri.WorldImagery</code>) using canonical reef boundary geometry (<code>data/rrap_canonical_2025-03-20-T15-18-17.gpkg</code>) and transparent orange COTS cull site boxes (<code>data/Eotr_CotsCullSites_2025_11_19_1_58_PM.gpkg</code>). Buffer rings around eDNA sampling stations are bounded up to <strong>200m</strong>.</p>
+<section id="case-study-eyrie-reef-14-118-satellite-map-2000m-buffer-extents" class="level3">
+<h3 class="anchored" data-anchor-id="case-study-eyrie-reef-14-118-satellite-map-2000m-buffer-extents">Case Study: Eyrie Reef (14-118) Satellite Map &amp; 2000m Buffer Extents</h3>
+<p>To visualize physical overlap between eDNA sampling stations and COTS control operations, we map <strong>Eyrie Reef (14-118)</strong> over high-resolution satellite imagery (<code>Esri.WorldImagery</code>) using canonical reef boundary geometry (<code>data/rrap_canonical_2025-03-20-T15-18-17.gpkg</code>) and transparent orange COTS cull site boxes (<code>data/Eotr_CotsCullSites_2025_11_19_1_58_PM.gpkg</code>). Buffer rings around eDNA sampling stations are shown at <strong>200m, 500m, 1000m, and 2000m</strong>.</p>
 <div class="cell">
 <details class="code-fold">
 <summary>Code</summary>
-<div class="sourceCode cell-code" id="cb34"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggspatial)</span>
-<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a>reef_canonical <span class="ot">&lt;-</span> <span class="fu">read_sf</span>(<span class="st">"data/rrap_canonical_2025-03-20-T15-18-17.gpkg"</span>) <span class="sc">%&gt;%</span> <span class="fu">st_transform</span>(<span class="dv">4326</span>)</span>
-<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a>cull_sites_gpkg <span class="ot">&lt;-</span> <span class="fu">read_sf</span>(<span class="st">"data/Eotr_CotsCullSites_2025_11_19_1_58_PM.gpkg"</span>) <span class="sc">%&gt;%</span> <span class="fu">st_transform</span>(<span class="dv">4326</span>)</span>
-<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a>eyrie_reef_poly <span class="ot">&lt;-</span> reef_canonical <span class="sc">%&gt;%</span> <span class="fu">filter</span>(<span class="fu">grepl</span>(<span class="st">"Eyrie"</span>, reef_name, <span class="at">ignore.case =</span> <span class="cn">TRUE</span>) <span class="sc">|</span> <span class="fu">grepl</span>(<span class="st">"14-118"</span>, GBRMPA_ID, <span class="at">ignore.case =</span> <span class="cn">TRUE</span>))</span>
-<span id="cb34-7"><a href="#cb34-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb34-8"><a href="#cb34-8" aria-hidden="true" tabindex="-1"></a>eyrie_pts <span class="ot">&lt;-</span> edna_sf <span class="sc">%&gt;%</span> <span class="fu">filter</span>(<span class="fu">grepl</span>(<span class="st">"Eyrie"</span>, Reef, <span class="at">ignore.case =</span> <span class="cn">TRUE</span>)) <span class="sc">%&gt;%</span> <span class="fu">st_transform</span>(<span class="dv">4326</span>)</span>
-<span id="cb34-9"><a href="#cb34-9" aria-hidden="true" tabindex="-1"></a>eyrie_site_agg <span class="ot">&lt;-</span> eyrie_pts <span class="sc">%&gt;%</span></span>
-<span id="cb34-10"><a href="#cb34-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(Site_name) <span class="sc">%&gt;%</span></span>
-<span id="cb34-11"><a href="#cb34-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">summarise</span>(<span class="at">geometry =</span> <span class="fu">st_centroid</span>(<span class="fu">st_union</span>(geometry)), <span class="at">.groups =</span> <span class="st">"drop"</span>)</span>
-<span id="cb34-12"><a href="#cb34-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb34-13"><a href="#cb34-13" aria-hidden="true" tabindex="-1"></a>eyrie_bbox_sf <span class="ot">&lt;-</span> <span class="fu">st_as_sfc</span>(<span class="fu">st_bbox</span>(<span class="fu">st_buffer</span>(<span class="fu">st_transform</span>(eyrie_reef_poly, <span class="dv">3112</span>), <span class="dv">1500</span>))) <span class="sc">%&gt;%</span> <span class="fu">st_transform</span>(<span class="dv">4326</span>)</span>
-<span id="cb34-14"><a href="#cb34-14" aria-hidden="true" tabindex="-1"></a>cull_eyrie_boxes <span class="ot">&lt;-</span> <span class="fu">st_intersection</span>(cull_sites_gpkg, eyrie_bbox_sf)</span>
-<span id="cb34-15"><a href="#cb34-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb34-16"><a href="#cb34-16" aria-hidden="true" tabindex="-1"></a>radii_200 <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">50</span>, <span class="dv">100</span>, <span class="dv">150</span>, <span class="dv">200</span>)</span>
-<span id="cb34-17"><a href="#cb34-17" aria-hidden="true" tabindex="-1"></a>eyrie_rings_200 <span class="ot">&lt;-</span> <span class="fu">st_sf</span>(</span>
-<span id="cb34-18"><a href="#cb34-18" aria-hidden="true" tabindex="-1"></a>    <span class="at">radius =</span> <span class="fu">factor</span>(<span class="fu">rep</span>(<span class="fu">paste0</span>(radii_200, <span class="st">"m"</span>), <span class="at">each =</span> <span class="fu">nrow</span>(eyrie_site_agg)), <span class="at">levels =</span> <span class="fu">paste0</span>(radii_200, <span class="st">"m"</span>)),</span>
-<span id="cb34-19"><a href="#cb34-19" aria-hidden="true" tabindex="-1"></a>    <span class="at">geometry =</span> <span class="fu">do.call</span>(c, <span class="fu">lapply</span>(radii_200, <span class="cf">function</span>(r) {</span>
-<span id="cb34-20"><a href="#cb34-20" aria-hidden="true" tabindex="-1"></a>        <span class="fu">st_geometry</span>(<span class="fu">st_buffer</span>(<span class="fu">st_transform</span>(eyrie_site_agg, <span class="dv">3112</span>), <span class="at">dist =</span> r) <span class="sc">%&gt;%</span> <span class="fu">st_transform</span>(<span class="dv">4326</span>))</span>
-<span id="cb34-21"><a href="#cb34-21" aria-hidden="true" tabindex="-1"></a>    })),</span>
-<span id="cb34-22"><a href="#cb34-22" aria-hidden="true" tabindex="-1"></a>    <span class="at">crs =</span> <span class="dv">4326</span></span>
+<div class="sourceCode cell-code" id="cb34"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(maptiles)</span>
+<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyterra)</span>
+<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a>reef_canonical <span class="ot">&lt;-</span> <span class="fu">read_sf</span>(<span class="st">"data/rrap_canonical_2025-03-20-T15-18-17.gpkg"</span>) <span class="sc">%&gt;%</span> <span class="fu">st_transform</span>(<span class="dv">4326</span>)</span>
+<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a>cull_sites_gpkg <span class="ot">&lt;-</span> <span class="fu">read_sf</span>(<span class="st">"data/Eotr_CotsCullSites_2025_11_19_1_58_PM.gpkg"</span>) <span class="sc">%&gt;%</span> <span class="fu">st_transform</span>(<span class="dv">4326</span>)</span>
+<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-7"><a href="#cb34-7" aria-hidden="true" tabindex="-1"></a>eyrie_reef_poly <span class="ot">&lt;-</span> reef_canonical <span class="sc">%&gt;%</span> <span class="fu">filter</span>(<span class="fu">grepl</span>(<span class="st">"Eyrie"</span>, reef_name, <span class="at">ignore.case =</span> <span class="cn">TRUE</span>) <span class="sc">|</span> <span class="fu">grepl</span>(<span class="st">"14-118"</span>, GBRMPA_ID, <span class="at">ignore.case =</span> <span class="cn">TRUE</span>))</span>
+<span id="cb34-8"><a href="#cb34-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-9"><a href="#cb34-9" aria-hidden="true" tabindex="-1"></a>eyrie_pts_projected <span class="ot">&lt;-</span> edna_sf <span class="sc">%&gt;%</span> <span class="fu">filter</span>(<span class="fu">grepl</span>(<span class="st">"Eyrie"</span>, Reef, <span class="at">ignore.case =</span> <span class="cn">TRUE</span>))</span>
+<span id="cb34-10"><a href="#cb34-10" aria-hidden="true" tabindex="-1"></a>eyrie_site_agg_projected <span class="ot">&lt;-</span> eyrie_pts_projected <span class="sc">%&gt;%</span></span>
+<span id="cb34-11"><a href="#cb34-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(Site_name) <span class="sc">%&gt;%</span></span>
+<span id="cb34-12"><a href="#cb34-12" aria-hidden="true" tabindex="-1"></a>    <span class="fu">summarise</span>(<span class="at">geometry =</span> <span class="fu">st_centroid</span>(<span class="fu">st_union</span>(geometry)), <span class="at">.groups =</span> <span class="st">"drop"</span>)</span>
+<span id="cb34-13"><a href="#cb34-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-14"><a href="#cb34-14" aria-hidden="true" tabindex="-1"></a>eyrie_radii <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="dv">200</span>, <span class="dv">500</span>, <span class="dv">1000</span>, <span class="dv">2000</span>)</span>
+<span id="cb34-15"><a href="#cb34-15" aria-hidden="true" tabindex="-1"></a>eyrie_rings_projected <span class="ot">&lt;-</span> <span class="fu">st_sf</span>(</span>
+<span id="cb34-16"><a href="#cb34-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">radius =</span> <span class="fu">factor</span>(</span>
+<span id="cb34-17"><a href="#cb34-17" aria-hidden="true" tabindex="-1"></a>        <span class="fu">rep</span>(<span class="fu">paste0</span>(eyrie_radii, <span class="st">"m"</span>), <span class="at">each =</span> <span class="fu">nrow</span>(eyrie_site_agg_projected)),</span>
+<span id="cb34-18"><a href="#cb34-18" aria-hidden="true" tabindex="-1"></a>        <span class="at">levels =</span> <span class="fu">paste0</span>(eyrie_radii, <span class="st">"m"</span>)</span>
+<span id="cb34-19"><a href="#cb34-19" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb34-20"><a href="#cb34-20" aria-hidden="true" tabindex="-1"></a>    <span class="at">geometry =</span> <span class="fu">do.call</span>(c, <span class="fu">lapply</span>(eyrie_radii, <span class="cf">function</span>(r) {</span>
+<span id="cb34-21"><a href="#cb34-21" aria-hidden="true" tabindex="-1"></a>        <span class="fu">st_geometry</span>(<span class="fu">st_buffer</span>(eyrie_site_agg_projected, <span class="at">dist =</span> r))</span>
+<span id="cb34-22"><a href="#cb34-22" aria-hidden="true" tabindex="-1"></a>    }))</span>
 <span id="cb34-23"><a href="#cb34-23" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb34-24"><a href="#cb34-24" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb34-25"><a href="#cb34-25" aria-hidden="true" tabindex="-1"></a>p_eyrie_sat_map <span class="ot">&lt;-</span> <span class="fu">ggplot</span>() <span class="sc">+</span></span>
-<span id="cb34-26"><a href="#cb34-26" aria-hidden="true" tabindex="-1"></a>    <span class="fu">annotation_map_tile</span>(<span class="at">type =</span> <span class="st">"esri_world_imagery"</span>, <span class="at">zoom =</span> <span class="dv">15</span>) <span class="sc">+</span></span>
-<span id="cb34-27"><a href="#cb34-27" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_sf</span>(<span class="at">data =</span> eyrie_reef_poly, <span class="at">fill =</span> <span class="cn">NA</span>, <span class="at">color =</span> <span class="st">"cyan"</span>, <span class="at">linewidth =</span> <span class="fl">0.9</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>) <span class="sc">+</span></span>
-<span id="cb34-28"><a href="#cb34-28" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_sf</span>(<span class="at">data =</span> cull_eyrie_boxes, <span class="at">fill =</span> <span class="fu">alpha</span>(<span class="st">"orange"</span>, <span class="fl">0.35</span>), <span class="at">color =</span> <span class="st">"darkorange"</span>, <span class="at">linewidth =</span> <span class="fl">0.4</span>) <span class="sc">+</span></span>
-<span id="cb34-29"><a href="#cb34-29" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_sf</span>(<span class="at">data =</span> eyrie_rings_200, <span class="fu">aes</span>(<span class="at">color =</span> radius), <span class="at">fill =</span> <span class="cn">NA</span>, <span class="at">linewidth =</span> <span class="fl">0.8</span>) <span class="sc">+</span></span>
-<span id="cb34-30"><a href="#cb34-30" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_sf</span>(<span class="at">data =</span> eyrie_site_agg, <span class="at">fill =</span> <span class="st">"yellow"</span>, <span class="at">color =</span> <span class="st">"black"</span>, <span class="at">shape =</span> <span class="dv">21</span>, <span class="at">size =</span> <span class="fl">3.5</span>, <span class="at">stroke =</span> <span class="fl">1.2</span>) <span class="sc">+</span></span>
-<span id="cb34-31"><a href="#cb34-31" aria-hidden="true" tabindex="-1"></a>    <span class="fu">scale_color_manual</span>(</span>
-<span id="cb34-32"><a href="#cb34-32" aria-hidden="true" tabindex="-1"></a>        <span class="at">name =</span> <span class="st">"eDNA Buffer Radius"</span>,</span>
-<span id="cb34-33"><a href="#cb34-33" aria-hidden="true" tabindex="-1"></a>        <span class="at">values =</span> <span class="fu">c</span>(<span class="st">"50m"</span> <span class="ot">=</span> <span class="st">"#fee08b"</span>, <span class="st">"100m"</span> <span class="ot">=</span> <span class="st">"#fdae61"</span>, <span class="st">"150m"</span> <span class="ot">=</span> <span class="st">"#f46d43"</span>, <span class="st">"200m"</span> <span class="ot">=</span> <span class="st">"#d53e4f"</span>)</span>
-<span id="cb34-34"><a href="#cb34-34" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">+</span></span>
-<span id="cb34-35"><a href="#cb34-35" aria-hidden="true" tabindex="-1"></a>    <span class="fu">coord_sf</span>(</span>
-<span id="cb34-36"><a href="#cb34-36" aria-hidden="true" tabindex="-1"></a>        <span class="at">xlim =</span> <span class="fu">c</span>(<span class="fu">st_bbox</span>(eyrie_reef_poly)[<span class="st">"xmin"</span>] <span class="sc">-</span> <span class="fl">0.003</span>, <span class="fu">st_bbox</span>(eyrie_reef_poly)[<span class="st">"xmax"</span>] <span class="sc">+</span> <span class="fl">0.003</span>),</span>
-<span id="cb34-37"><a href="#cb34-37" aria-hidden="true" tabindex="-1"></a>        <span class="at">ylim =</span> <span class="fu">c</span>(<span class="fu">st_bbox</span>(eyrie_reef_poly)[<span class="st">"ymin"</span>] <span class="sc">-</span> <span class="fl">0.003</span>, <span class="fu">st_bbox</span>(eyrie_reef_poly)[<span class="st">"ymax"</span>] <span class="sc">+</span> <span class="fl">0.003</span>),</span>
-<span id="cb34-38"><a href="#cb34-38" aria-hidden="true" tabindex="-1"></a>        <span class="at">expand =</span> <span class="cn">FALSE</span></span>
-<span id="cb34-39"><a href="#cb34-39" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">+</span></span>
-<span id="cb34-40"><a href="#cb34-40" aria-hidden="true" tabindex="-1"></a>    <span class="fu">labs</span>(</span>
-<span id="cb34-41"><a href="#cb34-41" aria-hidden="true" tabindex="-1"></a>        <span class="at">title =</span> <span class="st">"Eyrie Reef (14-118) Satellite Map &amp; eDNA Buffer Extents (50m - 200m)"</span>,</span>
-<span id="cb34-42"><a href="#cb34-42" aria-hidden="true" tabindex="-1"></a>        <span class="at">subtitle =</span> <span class="st">"Canonical reef outline (cyan), COTS cull sites (transparent orange boxes), and site buffers up to 200m"</span>,</span>
-<span id="cb34-43"><a href="#cb34-43" aria-hidden="true" tabindex="-1"></a>        <span class="at">x =</span> <span class="st">"Longitude"</span>, <span class="at">y =</span> <span class="st">"Latitude"</span></span>
-<span id="cb34-44"><a href="#cb34-44" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">+</span></span>
-<span id="cb34-45"><a href="#cb34-45" aria-hidden="true" tabindex="-1"></a>    <span class="fu">theme_bw</span>(<span class="at">base_family =</span> <span class="st">"Helvetica"</span>) <span class="sc">+</span></span>
-<span id="cb34-46"><a href="#cb34-46" aria-hidden="true" tabindex="-1"></a>    <span class="fu">theme</span>(</span>
-<span id="cb34-47"><a href="#cb34-47" aria-hidden="true" tabindex="-1"></a>        <span class="at">legend.position =</span> <span class="st">"right"</span>,</span>
-<span id="cb34-48"><a href="#cb34-48" aria-hidden="true" tabindex="-1"></a>        <span class="at">plot.title =</span> <span class="fu">element_text</span>(<span class="at">face =</span> <span class="st">"bold"</span>, <span class="at">size =</span> <span class="dv">13</span>),</span>
-<span id="cb34-49"><a href="#cb34-49" aria-hidden="true" tabindex="-1"></a>        <span class="at">plot.subtitle =</span> <span class="fu">element_text</span>(<span class="at">size =</span> <span class="fl">9.5</span>, <span class="at">color =</span> <span class="st">"grey20"</span>)</span>
-<span id="cb34-50"><a href="#cb34-50" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb34-51"><a href="#cb34-51" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb34-52"><a href="#cb34-52" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="st">"plots/eyrie_reef_satellite_200m.png"</span>, p_eyrie_sat_map, <span class="at">width =</span> <span class="dv">10</span>, <span class="at">height =</span> <span class="fl">7.5</span>, <span class="at">dpi =</span> <span class="dv">300</span>)</span>
-<span id="cb34-53"><a href="#cb34-53" aria-hidden="true" tabindex="-1"></a>p_eyrie_sat_map</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb34-24"><a href="#cb34-24" aria-hidden="true" tabindex="-1"></a>eyrie_site_agg <span class="ot">&lt;-</span> <span class="fu">st_transform</span>(eyrie_site_agg_projected, <span class="dv">4326</span>)</span>
+<span id="cb34-25"><a href="#cb34-25" aria-hidden="true" tabindex="-1"></a>eyrie_rings <span class="ot">&lt;-</span> <span class="fu">st_transform</span>(eyrie_rings_projected, <span class="dv">4326</span>)</span>
+<span id="cb34-26"><a href="#cb34-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-27"><a href="#cb34-27" aria-hidden="true" tabindex="-1"></a><span class="co"># Derive the display extent in metres so the full 2000m rings are retained.</span></span>
+<span id="cb34-28"><a href="#cb34-28" aria-hidden="true" tabindex="-1"></a>eyrie_map_extent <span class="ot">&lt;-</span> <span class="fu">st_as_sfc</span>(<span class="fu">st_bbox</span>(<span class="fu">st_buffer</span>(eyrie_rings_projected, <span class="dv">250</span>))) <span class="sc">%&gt;%</span></span>
+<span id="cb34-29"><a href="#cb34-29" aria-hidden="true" tabindex="-1"></a>    <span class="fu">st_transform</span>(<span class="dv">4326</span>)</span>
+<span id="cb34-30"><a href="#cb34-30" aria-hidden="true" tabindex="-1"></a>eyrie_map_bbox <span class="ot">&lt;-</span> <span class="fu">st_bbox</span>(eyrie_map_extent)</span>
+<span id="cb34-31"><a href="#cb34-31" aria-hidden="true" tabindex="-1"></a>cull_eyrie_boxes <span class="ot">&lt;-</span> <span class="fu">suppressWarnings</span>(<span class="fu">st_intersection</span>(cull_sites_gpkg, eyrie_map_extent))</span>
+<span id="cb34-32"><a href="#cb34-32" aria-hidden="true" tabindex="-1"></a>eyrie_satellite <span class="ot">&lt;-</span> <span class="fu">get_tiles</span>(</span>
+<span id="cb34-33"><a href="#cb34-33" aria-hidden="true" tabindex="-1"></a>    eyrie_map_extent,</span>
+<span id="cb34-34"><a href="#cb34-34" aria-hidden="true" tabindex="-1"></a>    <span class="at">provider =</span> <span class="st">"Esri.WorldImagery"</span>,</span>
+<span id="cb34-35"><a href="#cb34-35" aria-hidden="true" tabindex="-1"></a>    <span class="at">crop =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb34-36"><a href="#cb34-36" aria-hidden="true" tabindex="-1"></a>    <span class="at">zoom =</span> <span class="dv">15</span></span>
+<span id="cb34-37"><a href="#cb34-37" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb34-38"><a href="#cb34-38" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-39"><a href="#cb34-39" aria-hidden="true" tabindex="-1"></a>p_eyrie_sat_map <span class="ot">&lt;-</span> <span class="fu">ggplot</span>() <span class="sc">+</span></span>
+<span id="cb34-40"><a href="#cb34-40" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_spatraster_rgb</span>(<span class="at">data =</span> eyrie_satellite) <span class="sc">+</span></span>
+<span id="cb34-41"><a href="#cb34-41" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_sf</span>(<span class="at">data =</span> eyrie_reef_poly, <span class="at">fill =</span> <span class="cn">NA</span>, <span class="at">color =</span> <span class="st">"cyan"</span>, <span class="at">linewidth =</span> <span class="fl">0.9</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>) <span class="sc">+</span></span>
+<span id="cb34-42"><a href="#cb34-42" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_sf</span>(<span class="at">data =</span> cull_eyrie_boxes, <span class="at">fill =</span> <span class="fu">alpha</span>(<span class="st">"orange"</span>, <span class="fl">0.35</span>), <span class="at">color =</span> <span class="st">"darkorange"</span>, <span class="at">linewidth =</span> <span class="fl">0.4</span>) <span class="sc">+</span></span>
+<span id="cb34-43"><a href="#cb34-43" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_sf</span>(<span class="at">data =</span> eyrie_rings, <span class="fu">aes</span>(<span class="at">color =</span> radius), <span class="at">fill =</span> <span class="cn">NA</span>, <span class="at">linewidth =</span> <span class="fl">0.8</span>) <span class="sc">+</span></span>
+<span id="cb34-44"><a href="#cb34-44" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_sf</span>(<span class="at">data =</span> eyrie_site_agg, <span class="at">fill =</span> <span class="st">"yellow"</span>, <span class="at">color =</span> <span class="st">"black"</span>, <span class="at">shape =</span> <span class="dv">21</span>, <span class="at">size =</span> <span class="fl">3.5</span>, <span class="at">stroke =</span> <span class="fl">1.2</span>) <span class="sc">+</span></span>
+<span id="cb34-45"><a href="#cb34-45" aria-hidden="true" tabindex="-1"></a>    <span class="fu">scale_color_manual</span>(</span>
+<span id="cb34-46"><a href="#cb34-46" aria-hidden="true" tabindex="-1"></a>        <span class="at">name =</span> <span class="st">"eDNA Buffer Radius"</span>,</span>
+<span id="cb34-47"><a href="#cb34-47" aria-hidden="true" tabindex="-1"></a>        <span class="at">values =</span> <span class="fu">c</span>(<span class="st">"200m"</span> <span class="ot">=</span> <span class="st">"#fee08b"</span>, <span class="st">"500m"</span> <span class="ot">=</span> <span class="st">"#fdae61"</span>, <span class="st">"1000m"</span> <span class="ot">=</span> <span class="st">"#f46d43"</span>, <span class="st">"2000m"</span> <span class="ot">=</span> <span class="st">"#d53e4f"</span>)</span>
+<span id="cb34-48"><a href="#cb34-48" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">+</span></span>
+<span id="cb34-49"><a href="#cb34-49" aria-hidden="true" tabindex="-1"></a>    <span class="fu">coord_sf</span>(</span>
+<span id="cb34-50"><a href="#cb34-50" aria-hidden="true" tabindex="-1"></a>        <span class="at">crs =</span> <span class="fu">st_crs</span>(<span class="dv">4326</span>),</span>
+<span id="cb34-51"><a href="#cb34-51" aria-hidden="true" tabindex="-1"></a>        <span class="at">default_crs =</span> <span class="fu">st_crs</span>(<span class="dv">4326</span>),</span>
+<span id="cb34-52"><a href="#cb34-52" aria-hidden="true" tabindex="-1"></a>        <span class="at">xlim =</span> <span class="fu">unname</span>(<span class="fu">c</span>(eyrie_map_bbox[<span class="st">"xmin"</span>], eyrie_map_bbox[<span class="st">"xmax"</span>])),</span>
+<span id="cb34-53"><a href="#cb34-53" aria-hidden="true" tabindex="-1"></a>        <span class="at">ylim =</span> <span class="fu">unname</span>(<span class="fu">c</span>(eyrie_map_bbox[<span class="st">"ymin"</span>], eyrie_map_bbox[<span class="st">"ymax"</span>])),</span>
+<span id="cb34-54"><a href="#cb34-54" aria-hidden="true" tabindex="-1"></a>        <span class="at">expand =</span> <span class="cn">FALSE</span></span>
+<span id="cb34-55"><a href="#cb34-55" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">+</span></span>
+<span id="cb34-56"><a href="#cb34-56" aria-hidden="true" tabindex="-1"></a>    <span class="fu">labs</span>(</span>
+<span id="cb34-57"><a href="#cb34-57" aria-hidden="true" tabindex="-1"></a>        <span class="at">title =</span> <span class="st">"Eyrie Reef (14-118) Satellite Map &amp; eDNA Buffer Extents (200m - 2000m)"</span>,</span>
+<span id="cb34-58"><a href="#cb34-58" aria-hidden="true" tabindex="-1"></a>        <span class="at">subtitle =</span> <span class="st">"Canonical reef outline (cyan), COTS cull sites (transparent orange boxes), and site buffers up to 2000m"</span>,</span>
+<span id="cb34-59"><a href="#cb34-59" aria-hidden="true" tabindex="-1"></a>        <span class="at">x =</span> <span class="st">"Longitude"</span>, <span class="at">y =</span> <span class="st">"Latitude"</span></span>
+<span id="cb34-60"><a href="#cb34-60" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">+</span></span>
+<span id="cb34-61"><a href="#cb34-61" aria-hidden="true" tabindex="-1"></a>    <span class="fu">theme_bw</span>(<span class="at">base_family =</span> <span class="st">"Helvetica"</span>) <span class="sc">+</span></span>
+<span id="cb34-62"><a href="#cb34-62" aria-hidden="true" tabindex="-1"></a>    <span class="fu">theme</span>(</span>
+<span id="cb34-63"><a href="#cb34-63" aria-hidden="true" tabindex="-1"></a>        <span class="at">legend.position =</span> <span class="st">"right"</span>,</span>
+<span id="cb34-64"><a href="#cb34-64" aria-hidden="true" tabindex="-1"></a>        <span class="at">plot.title =</span> <span class="fu">element_text</span>(<span class="at">face =</span> <span class="st">"bold"</span>, <span class="at">size =</span> <span class="dv">13</span>),</span>
+<span id="cb34-65"><a href="#cb34-65" aria-hidden="true" tabindex="-1"></a>        <span class="at">plot.subtitle =</span> <span class="fu">element_text</span>(<span class="at">size =</span> <span class="fl">9.5</span>, <span class="at">color =</span> <span class="st">"grey20"</span>)</span>
+<span id="cb34-66"><a href="#cb34-66" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb34-67"><a href="#cb34-67" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-68"><a href="#cb34-68" aria-hidden="true" tabindex="-1"></a><span class="fu">ggsave</span>(<span class="st">"plots/eyrie_reef_satellite_2000m.png"</span>, p_eyrie_sat_map, <span class="at">width =</span> <span class="dv">10</span>, <span class="at">height =</span> <span class="fl">7.5</span>, <span class="at">dpi =</span> <span class="dv">300</span>)</span>
+<span id="cb34-69"><a href="#cb34-69" aria-hidden="true" tabindex="-1"></a>p_eyrie_sat_map</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="eDNA_CPUE_Comparison_pkg_files/figure-html/eyrie-buffer-map-1.png" class="img-fluid figure-img" width="960"></p>
-<figcaption>High-resolution satellite map of Eyrie Reef (14-118) showing canonical reef outline (cyan dashed line), active COTS cull sites (transparent orange boxes), eDNA sampling stations (yellow points), and spatial buffer rings up to 200m.</figcaption>
+<figcaption>High-resolution satellite map of Eyrie Reef (14-118) showing canonical reef outline (cyan dashed line), active COTS cull sites (transparent orange boxes), eDNA sampling stations (yellow points), and spatial buffer rings at 200m, 500m, 1000m, and 2000m.</figcaption>
 </figure>
 </div>
 </div>
@@ -2118,50 +2144,6 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">0.02</td>
-<td style="text-align: left;">3000m Radius</td>
-<td style="text-align: left;">3x12 Density</td>
-<td style="text-align: right;">50</td>
-<td style="text-align: right;">0.833</td>
-<td style="text-align: right;">0.468</td>
-<td style="text-align: right;">0.833</td>
-<td style="text-align: right;">0.734</td>
-<td style="text-align: right;">0.780</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">0.02</td>
-<td style="text-align: left;">3000m Radius</td>
-<td style="text-align: left;">4x6 Density</td>
-<td style="text-align: right;">50</td>
-<td style="text-align: right;">0.917</td>
-<td style="text-align: right;">0.160</td>
-<td style="text-align: right;">0.917</td>
-<td style="text-align: right;">0.892</td>
-<td style="text-align: right;">0.904</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">0.02</td>
-<td style="text-align: left;">5000m Radius</td>
-<td style="text-align: left;">3x12 Density</td>
-<td style="text-align: right;">45</td>
-<td style="text-align: right;">0.865</td>
-<td style="text-align: right;">0.473</td>
-<td style="text-align: right;">0.865</td>
-<td style="text-align: right;">0.703</td>
-<td style="text-align: right;">0.776</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">0.02</td>
-<td style="text-align: left;">5000m Radius</td>
-<td style="text-align: left;">4x6 Density</td>
-<td style="text-align: right;">45</td>
-<td style="text-align: right;">0.844</td>
-<td style="text-align: right;">0.143</td>
-<td style="text-align: right;">0.844</td>
-<td style="text-align: right;">0.905</td>
-<td style="text-align: right;">0.874</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">0.02</td>
 <td style="text-align: left;">500m Radius</td>
 <td style="text-align: left;">3x12 Density</td>
 <td style="text-align: right;">50</td>
@@ -2247,50 +2229,6 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
 <td style="text-align: right;">0.750</td>
 <td style="text-align: right;">0.857</td>
 <td style="text-align: right;">0.800</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">0.04</td>
-<td style="text-align: left;">3000m Radius</td>
-<td style="text-align: left;">3x12 Density</td>
-<td style="text-align: right;">60</td>
-<td style="text-align: right;">0.854</td>
-<td style="text-align: right;">0.455</td>
-<td style="text-align: right;">0.854</td>
-<td style="text-align: right;">0.451</td>
-<td style="text-align: right;">0.590</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">0.04</td>
-<td style="text-align: left;">3000m Radius</td>
-<td style="text-align: left;">4x6 Density</td>
-<td style="text-align: right;">60</td>
-<td style="text-align: right;">0.762</td>
-<td style="text-align: right;">0.425</td>
-<td style="text-align: right;">0.762</td>
-<td style="text-align: right;">0.485</td>
-<td style="text-align: right;">0.593</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">0.04</td>
-<td style="text-align: left;">5000m Radius</td>
-<td style="text-align: left;">3x12 Density</td>
-<td style="text-align: right;">50</td>
-<td style="text-align: right;">0.900</td>
-<td style="text-align: right;">0.583</td>
-<td style="text-align: right;">0.900</td>
-<td style="text-align: right;">0.391</td>
-<td style="text-align: right;">0.545</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">0.04</td>
-<td style="text-align: left;">5000m Radius</td>
-<td style="text-align: left;">4x6 Density</td>
-<td style="text-align: right;">50</td>
-<td style="text-align: right;">0.920</td>
-<td style="text-align: right;">0.396</td>
-<td style="text-align: right;">0.920</td>
-<td style="text-align: right;">0.548</td>
-<td style="text-align: right;">0.687</td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">0.04</td>

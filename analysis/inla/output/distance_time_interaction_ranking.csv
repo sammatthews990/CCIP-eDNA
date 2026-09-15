@@ -1,0 +1,8 @@
+"model","terms","n","n_fixed","waic","effective_parameters_waic","dic","mean_log_cpo","cpo_failures","delta_waic","waic_weight","rank_waic"
+"full_all_pairwise","edna_prop_z + edna_conc_z + distance_z + lag_z + edna_prop_z:edna_conc_z + edna_prop_z:distance_z + edna_prop_z:lag_z + edna_conc_z:distance_z + edna_conc_z:lag_z + distance_z:lag_z",2117,11,13510.7019930646,41.9356958356102,13507.8482488129,-3.19251979354975,0,0,0.999852558463178,1
+"full+conc:distance","edna_prop_z + edna_conc_z + distance_z + lag_z + edna_conc_z:distance_z",2117,6,13528.3752890489,36.5781063061554,13526.8397911297,-3.19580010299301,0,17.673295984323,0.000145287583602166,2
+"full+distance:lag","edna_prop_z + edna_conc_z + distance_z + lag_z + distance_z:lag_z",2117,6,13537.0928244731,35.376350362003,13537.0631189099,-3.19766570337993,0,26.3908314085093,1.85883026722356e-06,3
+"full+prop:distance","edna_prop_z + edna_conc_z + distance_z + lag_z + edna_prop_z:distance_z",2117,6,13541.3788576727,36.0961615827431,13540.4134001039,-3.19881257863527,0,30.6768646081455,2.18041645831045e-07,4
+"full+prop:conc","edna_prop_z + edna_conc_z + distance_z + lag_z + edna_prop_z:edna_conc_z",2117,6,13544.5933058496,35.6953000506023,13543.9975686676,-3.19975026274798,0,33.891312785041,4.37049772727967e-08,5
+"full+conc:lag","edna_prop_z + edna_conc_z + distance_z + lag_z + edna_conc_z:lag_z",2117,6,13545.5009935647,35.5735322445926,13545.1366365609,-3.19959267776488,0,34.7990005001211,2.77606106945117e-08,6
+"full+prop:lag","edna_prop_z + edna_conc_z + distance_z + lag_z + edna_prop_z:lag_z",2117,6,13548.6970906329,35.3485125261352,13548.6393384056,-3.20035010678698,0,37.9950975682914,5.6157188345282e-09,7

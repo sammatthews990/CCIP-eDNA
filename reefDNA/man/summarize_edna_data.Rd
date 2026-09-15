@@ -12,7 +12,7 @@ summarize_edna_data(edna_file, sheet = "eDNA_data_ALL")
 \item{sheet}{Sheet name, defaults to "eDNA_data_ALL"}
 }
 \value{
-Summarised eDNA data per reef/year.
+Summarised eDNA data per reef/year, including earliest eDNA_Date.
 }
 \description{
 Summarize eDNA Data

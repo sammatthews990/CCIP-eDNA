@@ -1,0 +1,186 @@
+---
+title: "Operational CPUE model assessment"
+subtitle: "GLMM audit, concentration-free BRMS, boosted trees and ensemble"
+format:
+  html:
+    toc: true
+    embed-resources: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+library(dplyr)
+library(knitr)
+
+project_root <- normalizePath(
+  if (file.exists("analysis/ensemble/output/cpue_model_performance.csv")) "." else file.path("..", ".."),
+  winslash = "/", mustWork = TRUE
+)
+brms_dir <- file.path(project_root, "analysis", "brms", "output")
+brt_dir <- file.path(project_root, "analysis", "brt", "output")
+ensemble_dir <- file.path(project_root, "analysis", "ensemble", "output")
+glmm_ablation <- read.csv(file.path(brms_dir, "quick_glmm_ablation_curves.csv"))
+old_glmm <- read.csv(file.path(brms_dir, "old_glmm_curve_scale_audit.csv"))
+brms_curve <- read.csv(file.path(brms_dir, "operational_brms_percent_positive_curve.csv"))
+brms_effects <- read.csv(file.path(brms_dir, "operational_brms_fixed_effects.csv"))
+brt_tuning <- read.csv(file.path(brt_dir, "brt_tuning.csv"))
+brt_importance <- read.csv(file.path(brt_dir, "brt_importance.csv"))
+cpue_metrics <- read.csv(file.path(ensemble_dir, "cpue_model_performance.csv"))
+threshold_metrics <- read.csv(file.path(ensemble_dir, "threshold_model_performance.csv"))
+ensemble_weights <- read.csv(file.path(ensemble_dir, "threshold_ensemble_weights.csv"))
+```
+
+## Main finding
+
+The low BRMS curve was caused primarily by prediction scale, not concentration. The earlier figure set the reef random intercept to zero, producing the conditional prediction for a median or “typical” reef. It did not average over the substantial between-reef heterogeneity.
+
+For a log-scale reef effect with standard deviation approximately 1.29, the mean new-reef multiplier is `exp(sd^2 / 2)`, which is substantially above one. Correctly marginalizing over this distribution moves the concentration-free BRMS curve from approximately 0.010–0.023 to 0.022–0.052 CPUE across 0–100% positive. The resulting 0.04 crossing is `r round(approx(brms_curve$expected, brms_curve$edna_pct, xout = 0.04)$y, 1)`% positive.
+
+Concentration x distance does move the crossing later, but it is not responsible for the original failure to cross 0.04. In the BRMS ablation, the crossing changes from about 69% without concentration to 75% with the interaction. The equivalent fast GLMM change is approximately 76% to 80%.
+
+## Old GLMM audit
+
+```{r}
+old_table <- old_glmm |>
+  filter(prediction_scale == "marginal_new_reef") |>
+  distinct(horizon, n, reef_sd, crossing_002, crossing_004) |>
+  transmute(
+    Horizon = horizon,
+    N = n,
+    `Reef SD` = round(reef_sd, 2),
+    `0.02 crossing (%)` = round(crossing_002, 1),
+    `0.04 crossing (%)` = round(crossing_004, 1)
+  )
+kable(old_table)
+```
+
+The old figure used 200 reef/eDNA-event aggregates across disjoint time windows. The new model uses 2,117 individual culls, retains survey effort through a count offset, and assigns one most-recent eligible eDNA event to each cull. Consequently, the old and new curves also differ in weighting and target population.
+
+```{r, out.width="100%", fig.cap="Earlier six-panel GLMM results based on reef/event aggregation and disjoint temporal windows."}
+knitr::include_graphics(file.path(project_root, "plots", "glmm_6panel_disjoint_windows.png"))
+```
+
+## Fast concentration ablation
+
+```{r}
+ablation_table <- glmm_ablation |>
+  filter(prediction_scale == "marginal_new_reef") |>
+  distinct(model, AIC, reef_sd, crossing_002, crossing_004) |>
+  transmute(
+    Model = model,
+    AIC = round(AIC, 1),
+    `Reef SD` = round(reef_sd, 2),
+    `0.02 crossing (%)` = round(crossing_002, 1),
+    `0.04 crossing (%)` = round(crossing_004, 1)
+  )
+kable(ablation_table)
+```
+
+The concentration-by-distance model has the best in-sample likelihood/AIC but delays the operational crossing. Removing concentration trades some predictive likelihood for a simpler and more sensitive operational rule. Distance and elapsed time remain useful without concentration.
+
+## Operational BRMS model
+
+The final operational formula is:
+
+```text
+cots_count ~ % positive + distance + time since eDNA
+             + offset(log(bottom time)) + (1 | reef)
+```
+
+It was refitted with four chains and 12,000 retained posterior draws. All reported R-hat values are 1.00, the minimum bulk ESS exceeds 1,000, and repaired PSIS-LOO has no Pareto-k value above 0.7.
+
+```{r}
+kable(
+  brms_effects |>
+    transmute(
+      Term = term,
+      Estimate = round(Estimate, 3),
+      `95% lower` = round(Q2.5, 3),
+      `95% upper` = round(Q97.5, 3)
+    )
+)
+```
+
+Pointwise LOO still favours the concentration-by-distance model by 9.6 ELPD (5.4 SE). The concentration-free model is therefore an explicitly operational choice, not the unconstrained predictive-likelihood winner.
+
+```{r}
+#| out-width: 100%
+#| fig-cap: "Concentration ablation and concentration-free BRMS posterior summaries. Expected curves are marginalized over the new-reef distribution."
+knitr::include_graphics(file.path(project_root, "plots", "brms_operational_four_panel.png"))
+```
+
+## Boosted regression trees
+
+The BRT uses Poisson gradient-boosted trees with the survey effort supplied as an exact log base margin. Depth and learning rate were selected using the same five whole-reef folds. Partial-dependence intervals use 100 bootstrap samples of complete reefs.
+
+```{r}
+kable(brt_importance |> mutate(importance = round(importance, 1)))
+```
+
+```{r}
+#| out-width: 100%
+#| fig-cap: "Concentration-free boosted-tree performance, variable importance and whole-reef bootstrap partial dependence."
+knitr::include_graphics(file.path(project_root, "plots", "brt_cpue_four_panel.png"))
+```
+
+## Ensemble assessment
+
+All performance estimates below come from observations held out with their complete reef.
+
+```{r}
+kable(cpue_metrics |> mutate(across(where(is.numeric), ~ round(.x, 3))))
+```
+
+The CPUE ensemble assigns 34% weight to BRMS and 66% to BRT. It offers only a modest RMSE improvement, from 0.0603 for BRT to 0.0597. This is a useful but small gain.
+
+```{r}
+kable(
+  threshold_metrics |>
+    transmute(
+      Threshold = threshold,
+      Model = model,
+      AUC = round(AUC, 3),
+      Brier = round(Brier, 3),
+      Cutoff = round(cutoff, 2),
+      F1 = round(F1, 3),
+      Recall = round(recall, 3),
+      Precision = round(precision, 3),
+      Specificity = round(specificity, 3),
+      `False negatives` = false_negatives
+    )
+)
+```
+
+At the 0.04 threshold, the concentration-free BRMS has the best tuned F1 among the assessed models (0.661) with recall 0.919. The calibrated probability ensemble has slightly higher AUC and lower Brier score, but maximizing its F1 selects a very low probability cutoff and almost eliminates specificity. Probability calibration and operational alerting should therefore be reported separately.
+
+```{r}
+#| out-width: 100%
+#| fig-cap: "Whole-reef validation of GLMM, BRMS, BRT and cross-validated ensemble predictions."
+knitr::include_graphics(file.path(project_root, "plots", "cpue_ensemble_assessment.png"))
+```
+
+## Deployment object
+
+The saved model bundle contains the concentration-free BRMS fit, final BRT regression and threshold classifiers, scaling rules, ensemble weights, and F1-tuned alert cutoffs. The package prediction interface accepts percent positive, distance, elapsed days and optional survey effort or reef name:
+
+```r
+models <- readRDS("analysis/ensemble/output/reefDNA_operational_model_bundle.rds")
+
+new_edna <- data.frame(
+  perc_pos = c(40, 75, 95),
+  distance_m = c(200, 500, 1500),
+  lag_days = c(30, 90, 180),
+  bottom_time = 216
+)
+
+reefDNA::predict_reef_cpue(models, new_edna, method = "ensemble")
+```
+
+The result includes expected CPUE, a credible interval, a future-observation interval, probabilities of exceeding 0.02/0.04/0.08, and the corresponding F1-tuned alert flags. For unseen reefs, BRMS predictions integrate the reef-effect distribution. Known reefs use their fitted effect when their name matches the training data.
+
+## Limitations
+
+Only 36 reefs contribute to training. Whole-reef validation shows weak-to-moderate discrimination, especially for 0.04 and 0.08. The models are suitable as decision support but not as a stand-alone rule that overrides field knowledge. Operational thresholds should be revisited when the relative cost of missed outbreaks and unnecessary deployments is agreed, because F1 treats precision and recall symmetrically and can still imply very low specificity.

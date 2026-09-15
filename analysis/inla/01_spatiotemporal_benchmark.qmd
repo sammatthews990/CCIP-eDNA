@@ -1,0 +1,267 @@
+---
+title: "Spatio-temporal INLA benchmark for eDNA-informed COTS CPUE"
+author: "Sam Matthews"
+format:
+  html:
+    toc: true
+    code-fold: true
+execute:
+  warning: false
+  message: false
+---
+
+## Purpose
+
+This is the first executable milestone from `INLA_IMPLEMENTATION_PLAN.md`. It creates audited raw eDNA/cull links, aggregates those links to one response per cull dive, fits a negative-binomial spatio-temporal INLA benchmark, and generates site-level CPUE predictions for 0, 200, 500, 1000, and 2000 m distance scenarios.
+
+The benchmark deliberately precedes the joint raw-replicate likelihood. Raw eDNA rows are preserved in the linkage table, but the same cull count is never copied across replicate rows.
+
+```{r setup}
+library(dplyr)
+library(ggplot2)
+library(readxl)
+library(sf)
+
+project_root <- normalizePath(
+  if (file.exists("data/eDNA data_ALL_20260528.xlsx")) "." else file.path("..", ".."),
+  winslash = "/",
+  mustWork = TRUE
+)
+devtools::load_all(file.path(project_root, "reefDNA"))
+
+output_dir <- file.path(project_root, "analysis", "inla", "output")
+dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+model_path <- file.path(output_dir, "stage_a_inla_model.rds")
+refit_model <- identical(tolower(Sys.getenv("REEFDNA_REFIT_INLA", "false")), "true")
+reuse_saved_fit <- !refit_model && file.exists(model_path)
+set.seed(20260907)
+```
+
+## Data preparation and polygon reconciliation
+
+```{r data-linkage}
+if (reuse_saved_fit) {
+  inla_benchmark <- readRDS(model_path)
+  benchmark <- inla_benchmark$benchmark
+  space_time_links <- readRDS(file.path(output_dir, "space_time_links.rds"))
+  linkage_audit <- list(
+    totals = read.csv(file.path(output_dir, "linkage_totals.csv")),
+    by_year = read.csv(file.path(output_dir, "linkage_by_year.csv")),
+    polygon_link_method = read.csv(file.path(output_dir, "polygon_link_method.csv"))
+  )
+} else {
+edna_raw <- read_excel(
+  file.path(project_root, "data", "eDNA data_ALL_20260528.xlsx"),
+  sheet = "eDNA_data_ALL"
+)
+cull_raw <- read_excel(
+  file.path(project_root, "data", "260529-COTS-Manta-Cull-RHIS-Lawrence-CSIRO.xlsx"),
+  sheet = "Cull"
+)
+cull_site_raw <- read_sf(
+  file.path(project_root, "data", "Eotr_CotsCullSites_2025_11_19_1_58_PM.gpkg"),
+  quiet = TRUE
+)
+
+edna_obs <- prepare_inla_edna(edna_raw, crs_projected = 3112)
+cull_obs <- prepare_inla_culls(
+  cull_raw,
+  crs_projected = 3112,
+  min_date = min(edna_obs$date_edna),
+  max_date = max(edna_obs$date_edna) + 183
+)
+cull_sites <- prepare_inla_cull_sites(cull_site_raw, crs_projected = 3112)
+cull_obs <- link_inla_culls_to_sites(cull_obs, cull_sites, max_fallback_m = 2000)
+
+space_time_links <- build_inla_space_time_links(
+  edna_obs,
+  cull_obs,
+  max_distance_m = 2000,
+  min_lag_days = 0,
+  max_lag_days = 183,
+  same_reef = TRUE
+)
+benchmark <- summarise_inla_benchmark(space_time_links, edna_obs, cull_obs)
+linkage_audit <- audit_inla_linkage(edna_obs, cull_obs, space_time_links, benchmark)
+}
+
+stopifnot(
+  nrow(benchmark) == dplyr::n_distinct(benchmark$cull_id),
+  max(space_time_links$distance_m) <= 2000,
+  min(space_time_links$lag_days) >= 0,
+  max(space_time_links$lag_days) <= 183,
+  st_crs(benchmark)$epsg == 3112
+)
+
+write.csv(linkage_audit$totals, file.path(output_dir, "linkage_totals.csv"), row.names = FALSE)
+write.csv(linkage_audit$by_year, file.path(output_dir, "linkage_by_year.csv"), row.names = FALSE)
+write.csv(linkage_audit$polygon_link_method, file.path(output_dir, "polygon_link_method.csv"), row.names = FALSE)
+saveRDS(space_time_links, file.path(output_dir, "space_time_links.rds"))
+saveRDS(benchmark, file.path(output_dir, "benchmark_data.rds"))
+
+linkage_audit$totals
+linkage_audit$by_year
+linkage_audit$polygon_link_method
+```
+
+## Mesh and prediction scenarios
+
+The first benchmark uses annual AR(1) groups because the linked observations cover eight years and monthly coverage is sparse. The spatial mesh is intentionally coarser than the 200–2000 m fixed distance effect: the SPDE captures broad residual dependence, while distance is estimated directly as a covariate.
+
+```{r mesh, fig.width=9, fig.height=7}
+if (reuse_saved_fit) {
+  site_scenarios <- inla_benchmark$prediction
+  mesh <- inla_benchmark$mesh
+} else {
+linked_reefs <- unique(benchmark$Reef)
+edna_model <- edna_obs %>% filter(.data$Reef %in% linked_reefs)
+
+prediction_date <- max(benchmark$date_cull)
+site_scenarios <- build_inla_distance_scenarios(
+  edna_model,
+  distances_m = c(0, 200, 500, 1000, 2000),
+  prediction_date = prediction_date,
+  lag_days = 0
+)
+
+mesh_locations <- st_sf(
+  geometry = c(st_geometry(benchmark), st_geometry(edna_model)),
+  crs = st_crs(benchmark)
+)
+mesh <- build_inla_spde_mesh(
+  mesh_locations,
+  cutoff_m = 15000,
+  max_edge_m = c(50000, 150000),
+  offset_m = c(50000, 150000)
+)
+}
+mesh_summary <- summarise_inla_mesh(mesh)
+write.csv(mesh_summary, file.path(output_dir, "mesh_summary.csv"), row.names = FALSE)
+saveRDS(mesh, file.path(output_dir, "spde_mesh.rds"))
+
+plot(mesh, asp = 1, main = "GBR benchmark SPDE mesh (EPSG:3112)")
+points(st_coordinates(benchmark), pch = 16, cex = 0.25, col = "#d7301f80")
+mesh_summary
+```
+
+## Stage A negative-binomial INLA model
+
+The saved fit is reused on ordinary renders because fitting the annual spatial
+field is intentionally expensive. Set `REEFDNA_REFIT_INLA=true` to force a new
+fit after changing the model, mesh, or input data.
+
+```{r model-fit}
+if (!reuse_saved_fit) {
+  inla_benchmark <- fit_inla_cpue_benchmark(
+    benchmark = benchmark,
+    mesh = mesh,
+    prediction = site_scenarios,
+    time_resolution = "year",
+    prior_range_m = 25000,
+    prior_range_prob = 0.05,
+    prior_sigma = 1,
+    prior_sigma_prob = 0.05,
+    num_threads = "2:1"
+  )
+  saveRDS(inla_benchmark, model_path)
+}
+
+fixed_effects <- tibble::rownames_to_column(
+  as.data.frame(inla_benchmark$fit$summary.fixed),
+  "term"
+)
+hyperparameters <- tibble::rownames_to_column(
+  as.data.frame(inla_benchmark$fit$summary.hyperpar),
+  "parameter"
+)
+write.csv(fixed_effects, file.path(output_dir, "fixed_effects.csv"), row.names = FALSE)
+write.csv(hyperparameters, file.path(output_dir, "hyperparameters.csv"), row.names = FALSE)
+
+fixed_effects
+hyperparameters
+```
+
+## Diagnostics
+
+```{r diagnostics}
+diagnostics <- summarise_inla_diagnostics(inla_benchmark)
+write.csv(
+  diagnostics$information_criteria,
+  file.path(output_dir, "information_criteria.csv"),
+  row.names = FALSE
+)
+write.csv(
+  diagnostics$predictive,
+  file.path(output_dir, "predictive_diagnostics.csv"),
+  row.names = FALSE
+)
+
+diagnostics$information_criteria
+diagnostics$predictive
+```
+
+## Site-distance CPUE predictions
+
+Predictions use one minute of reference effort, so expected count equals expected CPUE. The table retains posterior means, 80% and 95% intervals, and probabilities of exceeding the 0.02 and 0.04 management thresholds.
+
+```{r site-predictions}
+site_predictions <- extract_inla_cpue_predictions(inla_benchmark, tag = "pred")
+site_predictions_table <- site_predictions %>%
+  st_drop_geometry() %>%
+  select(
+    scenario_id, Reef, site_name, distance_scenario_m,
+    edna_prop_positive, edna_conc_mean,
+    cpue_mean, cpue_q025, cpue_q10, cpue_q50, cpue_q90, cpue_q975,
+    prob_cpue_gt_002, prob_cpue_gt_004
+  )
+write.csv(
+  site_predictions_table,
+  file.path(output_dir, "site_distance_predictions.csv"),
+  row.names = FALSE
+)
+saveRDS(site_predictions, file.path(output_dir, "site_distance_predictions.rds"))
+
+site_predictions_table %>%
+  filter(grepl("Eyrie", Reef, ignore.case = TRUE)) %>%
+  arrange(site_name, distance_scenario_m)
+```
+
+```{r distance-plot, fig.width=9, fig.height=6}
+distance_summary <- site_predictions_table %>%
+  group_by(distance_scenario_m) %>%
+  summarise(
+    median_cpue = median(cpue_mean),
+    median_q10 = median(cpue_q10),
+    median_q90 = median(cpue_q90),
+    median_prob_gt_002 = median(prob_cpue_gt_002),
+    median_prob_gt_004 = median(prob_cpue_gt_004),
+    .groups = "drop"
+  )
+
+p_distance <- ggplot(distance_summary, aes(distance_scenario_m, median_cpue)) +
+  geom_ribbon(aes(ymin = median_q10, ymax = median_q90), fill = "#3182bd", alpha = 0.22) +
+  geom_line(color = "#08519c", linewidth = 1) +
+  geom_point(color = "#08519c", size = 2.5) +
+  geom_hline(yintercept = c(0.02, 0.04), linetype = "dashed", color = c("#fdae6b", "#e6550d")) +
+  scale_x_continuous(breaks = c(0, 200, 500, 1000, 2000)) +
+  labs(
+    x = "Distance scenario (m)",
+    y = "Median site-level expected CPUE",
+    title = "Stage A INLA site predictions by distance",
+    subtitle = "Ribbon summarizes the median site-level 80% credible limits"
+  ) +
+  theme_bw()
+
+ggsave(
+  file.path(output_dir, "distance_scenario_predictions.png"),
+  p_distance,
+  width = 9,
+  height = 6,
+  dpi = 300
+)
+p_distance
+```
+
+## Interpretation boundary
+
+This benchmark is an implemented checkpoint, not the final causal or transport model. It uses event-level eDNA summaries as covariates while retaining raw replicate links for audit. The next model stage must add the planned joint Bernoulli detection and conditional concentration likelihoods sharing the latent field. Reef-level posterior aggregation must use posterior samples so spatial covariance is retained; averaging marginal credible limits is not an acceptable reef-level uncertainty calculation.
