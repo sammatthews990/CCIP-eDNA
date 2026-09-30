@@ -16,6 +16,10 @@ data <- readRDS(file.path(output_dir, "edna_first_site_visit_data.rds")) |>
     Reef = factor(Reef),
     site_id = factor(paste(Reef, cull_site_name, sep = "__")),
     edna_campaign_id = factor(edna_campaign_id),
+    sampling_design = factor(
+      sampling_design,
+      levels = c("3x12", "4x6", "other_or_mixed")
+    ),
     edna_prop_model = edna_prop_positive,
     distance_model = log1p(distance_m / 200),
     lag_model = log1p(lag_days),
@@ -32,6 +36,11 @@ for (variable in names(scale_spec)) {
     (data[[variable]] - scale_spec[[variable]]["center"]) /
     scale_spec[[variable]]["scale"]
 }
+
+# This is the shared, keyed input for the INLA, BRT and BRMS site models.
+# Write it here so downstream models do not depend on a BRMS fit having run.
+saveRDS(data, file.path(output_dir, "site_visit_model_data.rds"))
+saveRDS(scale_spec, file.path(output_dir, "site_visit_scale_spec.rds"))
 
 fixed <- cots_count ~ edna_prop_z + distance_z + lag_z + offset(log_effort)
 formulas <- list(

@@ -1,0 +1,37 @@
+Vessel,Voyage,start_date,end_date,reefs_visited,sites,funding_program,sampling_method,total_samples,culling_matches
+RV Cape Ferguson,AIMSeDNA19-01,2019-05-06,2019-05-15,4,7,AIMS Appropriation,Other/mixed design,166,11
+LIRS dinghy,AIMSeDNA20-01,2019-08-24,2019-09-01,3,5,Ian Potter Grant,Other/mixed design,150,11
+RV Cape Ferguson,AIMSeDNA20-02,2020-05-12,2020-05-19,4,8,AIMS Appropriation,Other/mixed design,211,17
+Kirsty K,AIMSeDNA21-01,2020-08-25,2020-09-01,3,5,LIRS CoTS Research Grant 2020,Other/mixed design,150,8
+JCU Charter,JCUeDNA21-01,2020-09-14,2020-09-19,5,8,LIRS CoTS Research Grant 2020,Other/mixed design,150,13
+RV Cape Ferguson,AIMSeDNA21-02,2021-05-13,2021-05-25,14,42,CCIP-D-03; CCIP_Delineation of Initiation box,3 sites x 12 reps,503,21
+Kirsty K,AIMSeDNA22-01,2021-08-19,2021-08-27,6,14,CCIP-D-03,Other/mixed design,258,16
+JCU Charter,JCUeDNA22-01,2021-11-27,2021-11-29,3,9,CCIP_Delineation of Initiation box,3 sites x 12 reps,108,0
+RV Solander,AIMSeDNA22-02,2022-03-28,2022-04-03,3,11,NAMMA,Other/mixed design,130,0
+RV Cape Ferguson,AIMSeDNA22-03,2022-05-13,2022-05-24,15,45,CCIP-D-03,3 sites x 12 reps,540,74
+Kirsty K,AIMSeDNA23-01,2022-08-20,2022-08-26,5,11,CCIP-D-03,Other/mixed design,222,26
+JCU Charter,JCUeDNA23-01,2022-10-26,2022-11-01,8,20,CCIP-P-04,3 sites x 12 reps,252,0
+RV Solander,AIMSeDNA23-02,2022-12-17,2022-12-30,1,3,CCIP-D-03,3 sites x 12 reps,36,16
+Reef Ranger,FMPCR 2023-03,2023-03-24,2023-04-03,7,16,CCIP-D-02,Other/mixed design,192,27
+RV Cape Ferguson,AIMSeDNA23-03,2023-06-27,2023-07-10,21,63,CCIP-D-03,3 sites x 12 reps,756,18
+Kirsty K,AIMSeDNA24-01,2023-09-14,2023-09-20,5,11,CCIP-D-03,Other/mixed design,222,31
+Reef Resilience,FMPCRS 2023-05,2023-11-02,2023-11-09,8,24,CCIP-D-03,3 sites x 12 reps,287,0
+RV Solander,AIMSeDNA24-02,2023-12-23,2024-01-05,5,15,CCIP-D-03; CCIP-P-04,3 sites x 12 reps,180,14
+RV Apollo,AIMSeDNA25-01,2024-08-19,2024-08-19,1,3,AIMS Appropriation,3 sites x 12 reps,36,17
+Kirsty K,AIMSeDNA25-02,2024-09-13,2024-09-19,3,5,AIMS Appropriation,Other/mixed design,100,10
+RV Solander,AIMSeDNA25-03,2024-12-10,2024-12-24,4,15,AIMS Appropriation,Other/mixed design,108,5
+Reef Resilience,FMPCRS 2025-01,2025-01-07,2025-01-16,9,36,CCIP-RT-02,4 sites x 6 reps,216,0
+Reef Resilience,FMPCRS 2025-02,2025-02-05,2025-02-14,9,36,CCIP-RT-02,4 sites x 6 reps,216,7
+Odyssey,136,2025-03-31,2025-04-13,2,8,CCIP-RT-02,4 sites x 6 reps,48,10
+Infamis,41,2025-04-04,2025-04-16,2,8,CCIP-RT-02,4 sites x 6 reps,48,21
+RV Solander,AIMSeDNA25-04,2025-05-27,2025-06-09,15,48,AIMS Appropriation,Other/mixed design,558,9
+Odyssey,142,2025-07-31,2025-08-11,2,8,CCIP-RT-02,4 sites x 6 reps,48,14
+RV Cape Ferguson,AIMSeDNA26-01,2025-08-01,2025-08-03,6,21,AIMS Appropriation,Other/mixed design,234,31
+Infamis,45,2025-08-13,2025-08-25,3,12,CCIP-RT-02,4 sites x 6 reps,72,25
+Kirsty K,AIMSeDNA26-02,2025-09-22,2025-09-28,5,13,AIMS Appropriation,Other/mixed design,184,18
+Reef Resilience,FMPCRS 2025-05,2025-10-28,2025-11-07,10,40,CCIP-BR-02,4 sites x 6 reps,240,8
+RV Solander,AIMSeDNA26-03,2025-12-29,2025-12-29,1,3,AIMS Appropriation,3 sites x 12 reps,36,0
+Reef Resilience,FMPCRS 2026-01,2026-01-06,2026-01-15,10,40,CCIP-BR-02,4 sites x 6 reps,240,0
+Reef Ranger,FMPCRS 2026-02,2026-01-23,2026-02-03,10,40,CCIP-BR-02,4 sites x 6 reps,238,20
+Reef Ranger,FMPCRS 2026-03,2026-03-06,2026-03-16,10,40,CCIP-BR-02,4 sites x 6 reps,238,0
+Reef Resilience,FMPRHIS 2026-07,2026-04-02,2026-04-09,10,40,CCIP-BR-02,4 sites x 6 reps,239,21

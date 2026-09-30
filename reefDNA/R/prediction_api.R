@@ -44,6 +44,22 @@
   data$edna_prop_z <- standardize(percent_positive / 100, "edna_prop_model")
   data$distance_z <- standardize(log1p(distance_m / 200), "distance_model")
   data$lag_z <- standardize(log1p(lag_days), "lag_model")
+  design_column <- intersect(c("sampling_design", "sampling_method"), names(data))
+  if (length(design_column)) {
+    design_key <- tolower(gsub("[^a-z0-9]", "", as.character(data[[design_column[[1]]]])))
+    data$sampling_design <- dplyr::case_when(
+      design_key %in% c("3x12", "3sitesx12reps") ~ "3x12",
+      design_key %in% c("4x6", "4sitesx6reps") ~ "4x6",
+      design_key %in% c("other", "mixed", "othermixed", "otherormixed", "othermixeddesign") ~
+        "other_or_mixed",
+      TRUE ~ NA_character_
+    )
+    if (anyNA(data$sampling_design)) {
+      stop("Sampling design must be 3x12, 4x6, or other_or_mixed.", call. = FALSE)
+    }
+    data$design_4x6 <- as.integer(data$sampling_design == "4x6")
+    data$design_other_or_mixed <- as.integer(data$sampling_design == "other_or_mixed")
+  }
   data$bottom_time <- bottom_time
   data$log_effort <- log(bottom_time)
   data$Reef <- if ("Reef" %in% names(data)) {
@@ -132,6 +148,14 @@ predict_brt_cpue <- function(model, newdata,
                              thresholds = c(0.02, 0.04, 0.08)) {
   if (!requireNamespace("xgboost", quietly = TRUE)) {
     stop("Package 'xgboost' is required for BRT predictions.", call. = FALSE)
+  }
+  design_predictors <- c("design_4x6", "design_other_or_mixed")
+  if (any(design_predictors %in% model$predictors) &&
+      !any(c("sampling_design", "sampling_method") %in% names(newdata))) {
+    stop(
+      "This BRT requires sampling_design: 3x12, 4x6, or other_or_mixed.",
+      call. = FALSE
+    )
   }
   default_effort <- if (is.null(model$default_effort)) 216 else model$default_effort
   prepared <- .prepare_operational_predictors(

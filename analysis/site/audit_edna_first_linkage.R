@@ -23,6 +23,7 @@ cull_raw <- read_excel(
   sheet = "Cull"
 )
 edna <- prepare_inla_edna(edna_raw, crs_projected = 3112)
+voyage_design <- summarise_edna_voyage_design(edna_raw)
 culls <- prepare_inla_culls(
   cull_raw, crs_projected = 3112,
   min_date = min(edna$date_edna), max_date = max(edna$date_edna) + 183
@@ -33,11 +34,14 @@ event_metadata <- edna |>
   st_drop_geometry() |>
   group_by(Reef, site_name, event_id, date_edna) |>
   summarise(
+    Voyage = dplyr::first(as.character(Voyage)),
+    n_voyages = n_distinct(as.character(Voyage)),
     edna_n_replicates = n_distinct(edna_id),
     edna_prop_positive = mean(detection, na.rm = TRUE),
     edna_conc_mean = mean(concentration, na.rm = TRUE),
     .groups = "drop"
   ) |>
+  left_join(voyage_design, by = "Voyage") |>
   arrange(Reef, date_edna, event_id) |>
   group_by(Reef) |>
   mutate(
@@ -47,6 +51,19 @@ event_metadata <- edna |>
   ) |>
   ungroup() |>
   select(-new_campaign, -campaign_number)
+
+if (any(event_metadata$n_voyages != 1L)) {
+  stop("At least one eDNA event contains samples from multiple voyages.")
+}
+campaign_voyages <- event_metadata |>
+  count(edna_campaign_id, Voyage, name = "n_events") |>
+  count(edna_campaign_id, name = "n_voyages")
+if (any(campaign_voyages$n_voyages != 1L)) {
+  stop("At least one seven-day eDNA campaign spans multiple voyages.")
+}
+if (anyNA(event_metadata$sampling_design)) {
+  stop("Sampling design could not be assigned to every eDNA event.")
+}
 
 cull_metadata <- culls |>
   st_drop_geometry() |>
@@ -125,6 +142,10 @@ unique_campaign_site_visits <- campaign_first_by_site |>
   group_by(site_visit_id) |>
   slice_head(n = 1L) |>
   ungroup()
+
+if (anyDuplicated(unique_campaign_site_visits$site_visit_id)) {
+  stop("The final site-model data contain duplicated site visits.")
+}
 
 summarise_design <- function(data, design) {
   tibble(

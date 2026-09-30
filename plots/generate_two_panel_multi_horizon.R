@@ -31,6 +31,11 @@ if (dir.exists(pkg_path)) {
 # Set clean global plot theme
 theme_set(theme_bw(base_family = "Helvetica") + theme(panel.grid.minor = element_blank()))
 
+# CPUE target for the confusion matrices (panels C & D); default 0.04. Usage: Rscript <script> 0.02
+cli_args <- commandArgs(trailingOnly = TRUE)
+cpue_target <- if (length(cli_args) > 0) as.numeric(cli_args[1]) else 0.04
+target_suffix <- if (cpue_target == 0.04) "" else sprintf("_cpue%03d", round(cpue_target * 100))
+
 # 1. Load Data
 cull_file <- "data/260529-COTS-Manta-Cull-RHIS-Lawrence-CSIRO.xlsx"
 edna_file <- "data/eDNA data_ALL_20260528.xlsx"
@@ -287,7 +292,6 @@ panel_b <- ggplot(grid, aes(x = perc_thresh, y = cpue_thresh, fill = F2)) +
 # ----------------------------------------------------
 # PANELS C & D: F1 vs F2 Confusion Matrices (CPUE >= 0.04)
 # ----------------------------------------------------
-cpue_target <- 0.04
 perc_grid_fine <- seq(0, 100, by = 1)
 
 grid_eval <- tibble(perc_thresh = perc_grid_fine) %>%
@@ -321,7 +325,7 @@ panel_c <- ggplot(df_cm_f1, aes(x = pred, y = actual, fill = row_prop)) +
   geom_text(aes(label = label), size = 4.0, fontface = "bold", color = "black") +
   scale_fill_viridis_c(option = "mako", direction = -1, begin = 0.25, limits = c(0, 1), name = "Row Prop.") +
   labs(
-    title = sprintf("C. F1-Optimised Matrix (%%pos* = %d%%)", p_star_f1),
+    title = sprintf("C. F1-Optimised Matrix (CPUE ≥ %.2f, %%pos* = %d%%)", cpue_target, p_star_f1),
     x = "Prediction from eDNA (% pos)",
     y = "Reference Culling CPUE"
   ) +
@@ -338,7 +342,7 @@ panel_d <- ggplot(df_cm_f2, aes(x = pred, y = actual, fill = row_prop)) +
   geom_text(aes(label = label), size = 4.0, fontface = "bold", color = "black") +
   scale_fill_viridis_c(option = "mako", direction = -1, begin = 0.25, limits = c(0, 1), name = "Row Prop.") +
   labs(
-    title = sprintf("D. F2-Optimised Matrix (%%pos* = %d%%)", p_star_f2),
+    title = sprintf("D. F2-Optimised Matrix (CPUE ≥ %.2f, %%pos* = %d%%)", cpue_target, p_star_f2),
     x = "Prediction from eDNA (% pos)",
     y = "Reference Culling CPUE"
   ) +
@@ -356,8 +360,9 @@ panel_d <- ggplot(df_cm_f2, aes(x = pred, y = actual, fill = row_prop)) +
 four_panel_plot <- (panel_a | panel_b) / (panel_c | panel_d) +
   plot_layout(heights = c(1.1, 1))
 
-ggsave("plots/multi_horizon_CPUE.png", four_panel_plot, width = 11, height = 9.5, dpi = 300, bg = "white")
-ggsave("plots/multi_horizon_CPUE.pdf", four_panel_plot, width = 11, height = 9.5, dpi = 300, device = cairo_pdf)
-ggsave("plots/multi_horizon_CPUE.eps", four_panel_plot, width = 11, height = 9.5, dpi = 300)
+out_file <- function(ext) sprintf("plots/multi_horizon_CPUE%s.%s", target_suffix, ext)
+ggsave(out_file("png"), four_panel_plot, width = 11, height = 9.5, dpi = 300, bg = "white")
+ggsave(out_file("pdf"), four_panel_plot, width = 11, height = 9.5, dpi = 300, device = cairo_pdf)
+ggsave(out_file("eps"), four_panel_plot, width = 11, height = 9.5, dpi = 300)
 
-cat("Successfully generated updated 4-panel figure and exported CSV table to plots/cv_performance_summary_table.csv!\n")
+cat(sprintf("Successfully generated %s and exported CSV table to plots/cv_performance_summary_table.csv!\n", out_file("png")))

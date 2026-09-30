@@ -59,3 +59,20 @@ test_that("site-visit grouping columns are constructed or retained", {
   expect_equal(prepared$edna_campaign_id, rep("campaign_1", 2))
   expect_equal(prepared$bottom_time, rep(480, 2))
 })
+
+test_that("sampling design is encoded for design-aware BRT models", {
+  scale_spec <- list(
+    edna_prop_model = c(center = 0.5, scale = 0.2),
+    distance_model = c(center = 1, scale = 0.5),
+    lag_model = c(center = 3, scale = 1)
+  )
+  prepared <- reefDNA:::.prepare_operational_predictors(
+    data.frame(
+      perc_pos = rep(50, 3), distance_m = rep(200, 3), lag_days = rep(30, 3),
+      sampling_design = c("3x12", "4 sites x 6 reps", "other_or_mixed")
+    ),
+    scale_spec
+  )
+  expect_equal(prepared$design_4x6, c(0L, 1L, 0L))
+  expect_equal(prepared$design_other_or_mixed, c(0L, 0L, 1L))
+})

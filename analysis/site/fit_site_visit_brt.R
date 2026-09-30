@@ -18,9 +18,16 @@ data <- readRDS(file.path(output_dir, "site_visit_model_data.rds")) |>
   mutate(
     Reef = as.character(Reef), site_id = as.character(site_id),
     edna_campaign_id = as.character(edna_campaign_id),
+    sampling_design = factor(
+      as.character(sampling_design),
+      levels = c("3x12", "4x6", "other_or_mixed")
+    ),
+    design_4x6 = as.integer(sampling_design == "4x6"),
+    design_other_or_mixed = as.integer(sampling_design == "other_or_mixed"),
     cpue = cots_count / bottom_time
   )
 scale_spec <- readRDS(file.path(output_dir, "site_visit_scale_spec.rds"))
+set.seed(20261012)
 
 # Balance complete eDNA campaigns across five validation folds. No campaign is
 # allowed to contribute to both training and assessment data.
@@ -34,10 +41,13 @@ write.csv(
   file.path(output_dir, "site_visit_campaign_fold_map.csv"), row.names = FALSE
 )
 
-predictors <- c("edna_prop_z", "distance_z", "lag_z")
-fit_regression <- function(training, depth, eta, n_trees) {
+predictors <- c(
+  "edna_prop_z", "distance_z", "lag_z",
+  "design_4x6", "design_other_or_mixed"
+)
+fit_regression <- function(training, depth, eta, n_trees, predictor_names = predictors) {
   matrix <- xgb.DMatrix(
-    as.matrix(training[predictors]), label = training$cots_count,
+    as.matrix(training[predictor_names]), label = training$cots_count,
     base_margin = training$log_effort
   )
   xgb.train(
@@ -50,9 +60,9 @@ fit_regression <- function(training, depth, eta, n_trees) {
     data = matrix, nrounds = n_trees, verbose = 0
   )
 }
-predict_regression <- function(fit, newdata) {
+predict_regression <- function(fit, newdata, predictor_names = predictors) {
   matrix <- xgb.DMatrix(
-    as.matrix(newdata[predictors]), base_margin = newdata$log_effort
+    as.matrix(newdata[predictor_names]), base_margin = newdata$log_effort
   )
   pmax(predict(fit, matrix) / newdata$bottom_time, 0)
 }
@@ -98,22 +108,64 @@ oof <- bind_rows(lapply(1:5, function(fold_id) {
   test |>
     transmute(
       site_visit_id, Reef, site_id, edna_campaign_id, fold,
+      sampling_design,
       observed_cpue = cpue,
       predicted_cpue = predict_regression(fit, test)
     )
 }))
 write.csv(oof, file.path(output_dir, "site_visit_brt_oof.csv"), row.names = FALSE)
 
+ablation_predictors <- list(
+  base = c("edna_prop_z", "distance_z", "lag_z"),
+  sampling_design = predictors
+)
+design_ablation <- bind_rows(lapply(names(ablation_predictors), function(model_name) {
+  predictor_names <- ablation_predictors[[model_name]]
+  fold_results <- bind_rows(lapply(1:5, function(fold_id) {
+    train <- filter(data, fold != fold_id)
+    test <- filter(data, fold == fold_id)
+    fit <- fit_regression(
+      train, best$interaction_depth, best$shrinkage, best$n_trees,
+      predictor_names = predictor_names
+    )
+    estimate <- predict_regression(fit, test, predictor_names = predictor_names)
+    tibble(
+      fold = fold_id,
+      rmse = sqrt(mean((test$cpue - estimate)^2)),
+      mae = mean(abs(test$cpue - estimate)),
+      correlation = suppressWarnings(cor(test$cpue, estimate))
+    )
+  }))
+  summarise(
+    fold_results,
+    model = model_name,
+    rmse_se = sd(rmse) / sqrt(n()), rmse = mean(rmse),
+    mae = mean(mae), correlation = mean(correlation, na.rm = TRUE)
+  )
+})) |>
+  arrange(rmse)
+write.csv(
+  design_ablation,
+  file.path(output_dir, "site_visit_brt_design_ablation.csv"), row.names = FALSE
+)
+
 final_regression <- fit_regression(
   data, best$interaction_depth, best$shrinkage, best$n_trees
 )
-importance <- xgb.importance(feature_names = predictors, model = final_regression) |>
-  as_tibble() |>
+importance <- tibble(Feature = predictors) |>
+  left_join(
+    xgb.importance(feature_names = predictors, model = final_regression) |>
+      as_tibble() |>
+      select(Feature, Gain),
+    by = "Feature"
+  ) |>
+  mutate(Gain = replace_na(Gain, 0)) |>
   transmute(
     variable = recode(
       Feature,
       edna_prop_z = "% positive", distance_z = "Distance",
-      lag_z = "Time since sample"
+      lag_z = "Time since sample", design_4x6 = "Sampling design: 4x6",
+      design_other_or_mixed = "Sampling design: other/mixed"
     ),
     importance = 100 * Gain
   )
@@ -170,7 +222,9 @@ positive_grid <- tibble(
   edna_pct = 0:100,
   edna_prop_z = z_value((0:100) / 100, "edna_prop_model"),
   distance_z = 0, lag_z = 0,
-  bottom_time = effort, log_effort = log(effort)
+  design_4x6 = 0L, design_other_or_mixed = 0L,
+  bottom_time = effort, log_effort = log(effort),
+  sampling_design = factor("3x12", levels = levels(data$sampling_design))
 )
 context_grid <- crossing(
   edna_pct = seq(0, 100, by = 2),
@@ -180,9 +234,22 @@ context_grid <- crossing(
     edna_prop_z = z_value(edna_pct / 100, "edna_prop_model"),
     distance_z = z_value(distance_m, "distance_model", function(x) log1p(x / 200)),
     lag_z = z_value(lag_days, "lag_model", log1p),
+    design_4x6 = 0L, design_other_or_mixed = 0L,
     bottom_time = effort, log_effort = log(effort),
     distance_label = factor(distance_m, c(200, 2000), c("200 m", "2,000 m")),
     lag_label = factor(lag_days, c(30, 183), c("30 days", "183 days"))
+  )
+
+design_grid <- crossing(
+  edna_pct = seq(0, 100, by = 2),
+  sampling_design = factor(levels(data$sampling_design), levels = levels(data$sampling_design))
+) |>
+  mutate(
+    edna_prop_z = z_value(edna_pct / 100, "edna_prop_model"),
+    distance_z = 0, lag_z = 0,
+    design_4x6 = as.integer(sampling_design == "4x6"),
+    design_other_or_mixed = as.integer(sampling_design == "other_or_mixed"),
+    bottom_time = effort, log_effort = log(effort)
   )
 
 # Resample complete reefs so bootstrap intervals retain both site and campaign
@@ -192,6 +259,7 @@ set.seed(20261012)
 reef_levels <- unique(data$Reef)
 positive_boot <- matrix(NA_real_, bootstrap_replicates, nrow(positive_grid))
 context_boot <- matrix(NA_real_, bootstrap_replicates, nrow(context_grid))
+design_boot <- matrix(NA_real_, bootstrap_replicates, nrow(design_grid))
 for (b in seq_len(bootstrap_replicates)) {
   sampled <- sample(reef_levels, length(reef_levels), replace = TRUE)
   bootstrap_data <- bind_rows(lapply(seq_along(sampled), function(i) {
@@ -202,6 +270,7 @@ for (b in seq_len(bootstrap_replicates)) {
   )
   positive_boot[b, ] <- predict_regression(fit, positive_grid)
   context_boot[b, ] <- predict_regression(fit, context_grid)
+  design_boot[b, ] <- predict_regression(fit, design_grid)
 }
 summarise_bootstrap <- function(values) {
   tibble(
@@ -212,6 +281,7 @@ summarise_bootstrap <- function(values) {
 }
 positive_summary <- bind_cols(positive_grid, summarise_bootstrap(positive_boot))
 context_summary <- bind_cols(context_grid, summarise_bootstrap(context_boot))
+design_summary <- bind_cols(design_grid, summarise_bootstrap(design_boot))
 write.csv(
   positive_summary,
   file.path(output_dir, "site_visit_brt_percent_positive.csv"), row.names = FALSE
@@ -220,8 +290,12 @@ write.csv(
   context_summary,
   file.path(output_dir, "site_visit_brt_context.csv"), row.names = FALSE
 )
+write.csv(
+  design_summary,
+  file.path(output_dir, "site_visit_brt_sampling_design.csv"), row.names = FALSE
+)
 saveRDS(
-  list(positive = positive_boot, context = context_boot),
+  list(positive = positive_boot, context = context_boot, design = design_boot),
   file.path(output_dir, "site_visit_brt_bootstrap.rds")
 )
 
@@ -229,6 +303,7 @@ model <- list(
   regression = final_regression, classifiers = classifiers,
   predictors = predictors, thresholds = thresholds,
   scale_spec = scale_spec, tuning = best,
+  sampling_design_levels = levels(data$sampling_design),
   training_ranges = lapply(data[predictors], range),
   default_effort = effort,
   oof_residual_quantiles = quantile(
@@ -262,7 +337,9 @@ panel_a <- ggplot(oof, aes(observed_cpue, predicted_cpue)) +
   ) + paper_theme
 panel_b <- ggplot(importance, aes(importance, reorder(variable, importance), fill = variable)) +
   geom_col(width = 0.65) +
-  scale_fill_manual(values = c(blue, light_blue, orange), guide = "none") +
+  scale_fill_manual(
+    values = c(blue, light_blue, orange, "#7B3294", "#008837"), guide = "none"
+  ) +
   labs(title = "Variable importance", x = "Relative influence (%)", y = NULL) +
   paper_theme
 panel_c <- ggplot(positive_summary, aes(edna_pct, estimate)) +
@@ -293,4 +370,5 @@ ggsave(
   width = 14, height = 10.5, units = "in", device = cairo_pdf
 )
 print(best)
+print(design_ablation)
 print(importance)
